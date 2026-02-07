@@ -137,7 +137,7 @@ export const Terminal: React.FC<TerminalProps> = ({ isRecording, audioLevels, he
             </div>
             <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2 text-zinc-500">
-                <span className="text-blue-500">→</span>
+                <span style={{ color: '#c9a961' }}>→</span>
                 <span className="text-[10px]">Frequency Spectrum</span>
               </div>
               {renderAudioBars()}

@@ -15,6 +15,37 @@ const TRACK_COLORS = [
   '#84cc16', // lime
 ];
 
+const DeleteConfirmPopup: React.FC<{ trackName: string; onConfirm: () => void; onCancel: () => void }> = ({
+  trackName,
+  onConfirm,
+  onCancel,
+}) => {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onCancel}>
+      <div 
+        className="bg-zinc-900 border border-zinc-800 rounded px-4 py-3 min-w-[280px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <p className="text-sm text-zinc-300 mb-4">Delete "{trackName}"?</p>
+        <div className="flex gap-2 justify-end">
+          <button
+            onClick={onCancel}
+            className="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-3 py-1.5 text-xs bg-red-500/20 text-red-400 hover:bg-red-500/30 hover:text-red-300 rounded transition-colors"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface TrackProps {
   track: TrackData;
   children: React.ReactNode;
@@ -44,6 +75,7 @@ export const Track: React.FC<TrackProps> = ({
   onSeek,
   onDelete,
 }) => {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editName, setEditName] = useState(track.name);
@@ -162,19 +194,29 @@ export const Track: React.FC<TrackProps> = ({
             <span className="text-[10px] font-mono text-zinc-500">{Math.round(track.volume * 100)}</span>
           </div>
           {onDelete && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (window.confirm(`Delete "${track.name}"?`)) {
-                  onDelete();
-                }
-              }}
-              className="text-xs text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded px-2 py-1 transition-colors flex items-center gap-1 justify-center"
-              title="Delete track"
-            >
-              <Trash2 size={12} />
-              Delete
-            </button>
+            <>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(true);
+                }}
+                className="text-[10px] text-zinc-500 hover:text-zinc-400 transition-colors flex items-center gap-1 justify-center"
+                title="Delete track"
+              >
+                <Trash2 size={10} />
+                Delete
+              </button>
+              {showDeleteConfirm && (
+                <DeleteConfirmPopup
+                  trackName={track.name}
+                  onConfirm={() => {
+                    onDelete();
+                    setShowDeleteConfirm(false);
+                  }}
+                  onCancel={() => setShowDeleteConfirm(false)}
+                />
+              )}
+            </>
           )}
           <input
             type="range"
