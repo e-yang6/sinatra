@@ -26,6 +26,7 @@ interface SignInPageProps {
   description?: React.ReactNode;
   heroImageSrc?: string;
   testimonials?: Testimonial[];
+  testimonialStack?: React.ReactNode;
   onSignIn?: (event: React.FormEvent<HTMLFormElement>) => void;
   onGoogleSignIn?: () => void;
   onResetPassword?: () => void;
@@ -59,6 +60,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   description = "Access your account and continue your journey with us",
   heroImageSrc,
   testimonials = [],
+  testimonialStack,
   onSignIn,
   onGoogleSignIn,
   onResetPassword,
@@ -131,17 +133,24 @@ export const SignInPage: React.FC<SignInPageProps> = ({
         </div>
       </section>
 
-      {/* Right column: hero image + testimonials */}
+      {/* Right column: testimonial swiper */}
       {heroImageSrc && (
-        <section className="hidden md:block flex-1 relative p-4">
-          <div className="absolute inset-4 rounded-3xl bg-cover bg-center" style={{ backgroundImage: `url(${heroImageSrc})` }}></div>
-          {testimonials.length > 0 && (
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex gap-4 px-8 w-full justify-center">
-              <TestimonialCard testimonial={testimonials[0]} delay="animate-delay-1000" />
-              {testimonials[1] && <div className="hidden xl:flex"><TestimonialCard testimonial={testimonials[1]} delay="animate-delay-1200" /></div>}
-              {testimonials[2] && <div className="hidden 2xl:flex"><TestimonialCard testimonial={testimonials[2]} delay="animate-delay-1400" /></div>}
-            </div>
-          )}
+        <section className="hidden md:block flex-1 relative p-4 overflow-hidden">
+          <div className="absolute inset-4 rounded-3xl overflow-hidden">
+            {/* Background image layer */}
+            <div 
+              className="absolute inset-0 bg-cover bg-bottom bg-no-repeat opacity-50 scale-[1.6]"
+              style={{ backgroundImage: `url(${heroImageSrc})` }}
+            />
+            {/* Gradient overlay */}
+            <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 via-zinc-950/60 to-zinc-950/80" />
+            {/* Testimonial stack */}
+            {testimonialStack && (
+              <div className="relative z-10 w-full h-full">
+                {testimonialStack}
+              </div>
+            )}
+          </div>
         </section>
       )}
     </div>
