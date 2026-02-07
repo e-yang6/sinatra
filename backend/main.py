@@ -132,12 +132,14 @@ async def upload_sample(file: UploadFile = File(...)):
 async def upload_vocal(
     file: UploadFile = File(...),
     raw_audio: bool = Form(default=False),
+    key: str = Form(default="C"),
+    scale: str = Form(default="chromatic"),
+    quantize: str = Form(default="off"),
 ):
     """
     Upload a vocal WAV recording.
     If raw_audio=True, just stores the file (no MIDI conversion).
-    Otherwise, converts it to MIDI using librosa pYIN.
-    Returns the MIDI filename (or None if raw_audio).
+    Otherwise, converts it to MIDI with optional key/scale snapping and quantization.
     """
     if not file.filename.lower().endswith(".wav"):
         raise HTTPException(status_code=400, detail="Only WAV files are accepted.")
@@ -160,10 +162,16 @@ async def upload_vocal(
             "raw_audio": True,
         }
     else:
-        # Convert to MIDI
+        # Convert to MIDI with key/scale/quantize
         try:
             current_bpm = session.get("drum_bpm") or 120
-            midi_path = vocal_to_midi(file_path, bpm=current_bpm)
+            midi_path = vocal_to_midi(
+                file_path,
+                bpm=current_bpm,
+                key=key,
+                scale=scale,
+                quantize=quantize,
+            )
         except Exception as e:
             cleanup_file(file_path)
             raise HTTPException(status_code=500, detail=f"MIDI transcription failed: {e}")

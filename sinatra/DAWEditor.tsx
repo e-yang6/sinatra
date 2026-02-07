@@ -3,7 +3,7 @@ import { Header } from './components/Header';
 import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
-import { InstrumentType, TrackData, Note, Clip } from './types';
+import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption } from './types';
 import { uploadDrum, uploadVocal, renderMidi, uploadSample } from './api';
 
 // ---- WAV encoding utility ----
@@ -81,6 +81,11 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   // ---- Custom sample state ----
   const [sampleName, setSampleName] = useState<string | undefined>();
   const [sampleNote, setSampleNote] = useState<string | undefined>();
+
+  // ---- Key / Scale / Quantize state ----
+  const [musicalKey, setMusicalKey] = useState<MusicalKey>('C');
+  const [scaleType, setScaleType] = useState<ScaleType>('chromatic');
+  const [quantize, setQuantize] = useState<QuantizeOption>('off');
 
   // ---- Audio visualization state ----
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
@@ -633,7 +638,11 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
 
     try {
       console.log(`[Sinatra] Processing clip ${clipId} for track ${trackId}: ${file.size} bytes, instrument: ${instrument}`);
-      await uploadVocal(file, isRawAudio);
+      await uploadVocal(file, isRawAudio, {
+        key: musicalKey,
+        scale: scaleType,
+        quantize,
+      });
 
       if (isRawAudio) {
         // Raw audio ΓÇö clip already has the correct audioUrl
@@ -1072,6 +1081,12 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           totalDuration={totalDuration}
           sampleName={sampleName}
           sampleNote={sampleNote}
+          musicalKey={musicalKey}
+          scaleType={scaleType}
+          quantize={quantize}
+          onKeyChange={setMusicalKey}
+          onScaleChange={setScaleType}
+          onQuantizeChange={setQuantize}
         />
 
         <Timeline

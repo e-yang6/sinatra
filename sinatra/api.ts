@@ -38,11 +38,19 @@ export async function uploadDrum(file: File): Promise<UploadDrumResponse> {
 
 /**
  * Upload a vocal WAV file and convert to MIDI (or store as raw audio)
+ * Optionally specify key, scale, and quantize for MIDI post-processing.
  */
-export async function uploadVocal(file: File, rawAudio: boolean = false): Promise<UploadVocalResponse> {
+export async function uploadVocal(
+  file: File,
+  rawAudio: boolean = false,
+  options?: { key?: string; scale?: string; quantize?: string },
+): Promise<UploadVocalResponse> {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('raw_audio', rawAudio.toString());
+  if (options?.key) formData.append('key', options.key);
+  if (options?.scale) formData.append('scale', options.scale);
+  if (options?.quantize) formData.append('quantize', options.quantize);
 
   const response = await fetch(`${API_BASE}/upload-vocal`, {
     method: 'POST',
