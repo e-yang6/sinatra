@@ -21,6 +21,22 @@ from services.transcription import vocal_to_midi
 from services.synth import render_midi_to_wav
 from utils.file_helpers import save_upload, validate_wav, cleanup_file, UPLOAD_DIR
 
+# Verify Basic Pitch is available at startup
+try:
+    from basic_pitch import ICASSP_2022_MODEL_PATH
+    from basic_pitch.inference import predict
+    print("=" * 60)
+    print("✅ Basic Pitch (ML Model) LOADED SUCCESSFULLY")
+    print(f"📦 Model path: {ICASSP_2022_MODEL_PATH}")
+    print("🎵 Using Spotify Basic Pitch for audio-to-MIDI transcription")
+    print("=" * 60)
+except ImportError as e:
+    print("=" * 60)
+    print("❌ ERROR: Basic Pitch not found!")
+    print(f"   {e}")
+    print("   Run: pip install basic-pitch==0.4.0 --no-deps")
+    print("=" * 60)
+
 app = FastAPI(title="Sinatra", version="0.1.0")
 
 # Allow the frontend (Vite dev server) to call us

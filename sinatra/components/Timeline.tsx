@@ -24,6 +24,7 @@ interface TimelineProps {
   onSelectTrack: (id: string) => void;
   onUpdateTrack: (id: string, updates: Partial<TrackData>) => void;
   onAddTrack: () => void;
+  onDeleteTrack: (id: string) => void;
   onSeek: (sec: number) => void;
 }
 
@@ -36,6 +37,7 @@ export const Timeline: React.FC<TimelineProps> = ({
   onSelectTrack,
   onUpdateTrack,
   onAddTrack,
+  onDeleteTrack,
   onSeek,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -147,6 +149,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                     onColorChange={(color) => onUpdateTrack(track.id, { color })}
                     onNameChange={(name) => onUpdateTrack(track.id, { name })}
                     onSeek={onSeek}
+                    onDelete={track.id !== '1' ? () => onDeleteTrack(track.id) : undefined}
                   >
                     {track.audioUrl ? (
                       <div

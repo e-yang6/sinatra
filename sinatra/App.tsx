@@ -188,6 +188,11 @@ const App: React.FC = () => {
     const el = drumAudioElRef.current;
     el.src = drumAudioUrlRef.current;
     el.loop = true;
+    // Set volume from track state
+    const drumTrack = tracks.find(t => t.id === '1');
+    if (drumTrack) {
+      el.volume = drumTrack.volume;
+    }
     // Seek within the loop
     if (el.duration) {
       el.currentTime = fromSec % el.duration;
@@ -195,7 +200,7 @@ const App: React.FC = () => {
       el.currentTime = 0;
     }
     el.play().catch(() => {});
-  }, []);
+  }, [tracks]);
 
   const stopDrumPlayback = useCallback(() => {
     if (drumAudioElRef.current) {
@@ -425,6 +430,11 @@ const App: React.FC = () => {
       const el = drumAudioElRef.current || new Audio();
       el.src = drumAudioUrlRef.current;
       el.loop = true;
+      // Set volume from track state
+      const drumTrack = tracks.find(t => t.id === '1');
+      if (drumTrack) {
+        el.volume = drumTrack.volume;
+      }
       el.addEventListener('loadedmetadata', () => {
         setTracks(prev => prev.map(t =>
           t.id === '1' ? { ...t, name: `Drum Loop (${res.bpm} BPM)`, audioUrl: drumAudioUrlRef.current || undefined, audioDuration: el.duration } : t
@@ -529,7 +539,7 @@ const App: React.FC = () => {
   // ==============================
   //  TRANSPORT CONTROLS
   // ==============================
-  const handlePlayToggle = () => {
+  const handlePlayToggle = async () => {
     if (isPlaying) {
       // ---- PAUSE: save position ----
       const elapsed = (performance.now() - transportStartRef.current) / 1000;
@@ -537,6 +547,7 @@ const App: React.FC = () => {
       setPlayheadSec(currentSec);
       setIsPlaying(false);
       stopTransport();
+      stopMetronome();
 
       // Pause all audio (keep position)
       if (drumAudioElRef.current) drumAudioElRef.current.pause();
@@ -546,12 +557,25 @@ const App: React.FC = () => {
       setIsPlaying(true);
       startTransport(playheadSec);
 
+      // Start metronome if enabled (create AudioContext if needed)
+      if (metronome) {
+        if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+          audioCtxRef.current = new AudioContext();
+        }
+        const ctx = audioCtxRef.current;
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
+        startMetronome(ctx, bpm);
+      }
+
       // Start drum from position (loops) - only if not muted
       const drumTrack = tracks.find(t => t.id === '1');
       if (drumAudioElRef.current?.src && drumTrack && !drumTrack.isMuted) {
         if (drumAudioElRef.current.duration) {
           drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
         }
+        drumAudioElRef.current.volume = drumTrack.volume;
         drumAudioElRef.current.play().catch(() => {});
       }
 
@@ -587,6 +611,27 @@ const App: React.FC = () => {
       el.pause();
       el.currentTime = 0;
     });
+  };
+
+  const handleDeleteTrack = (id: string) => {
+    // Don't allow deleting the drum track
+    if (id === '1') return;
+
+    // Stop and cleanup audio element
+    const el = trackAudioMapRef.current.get(id);
+    if (el) {
+      el.pause();
+      el.src = '';
+      trackAudioMapRef.current.delete(id);
+    }
+
+    // Remove from tracks
+    setTracks(prev => prev.filter(t => t.id !== id));
+
+    // If this was the selected track, select the drum track
+    if (selectedTrackId === id) {
+      setSelectedTrackId('1');
+    }
   };
 
   const handleUpdateTrack = (id: string, updates: Partial<TrackData>) => {
@@ -632,8 +677,10 @@ const App: React.FC = () => {
         const track = updated.find(t => t.id === id);
         if (track && !track.isMuted) {
           if (id === '1') {
-            // Drum track volume is handled by the audio element's volume property
-            // We could add a gain node if needed, but for now drum volume is fixed
+            // Drum track volume
+            if (drumAudioElRef.current) {
+              drumAudioElRef.current.volume = updates.volume;
+            }
           } else {
             const el = trackAudioMapRef.current.get(id);
             if (el) el.volume = updates.volume;
@@ -655,6 +702,24 @@ const App: React.FC = () => {
       }
     }
   }, [bpm, isRecording, isPlaying, metronome, startMetronome, stopMetronome]);
+
+  // Start/stop metronome when toggle changes during playback
+  useEffect(() => {
+    if (isPlaying && !isRecording && audioCtxRef.current) {
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'closed') return;
+      
+      if (metronome) {
+        if (ctx.state === 'suspended') {
+          ctx.resume().then(() => startMetronome(ctx, bpm));
+        } else {
+          startMetronome(ctx, bpm);
+        }
+      } else {
+        stopMetronome();
+      }
+    }
+  }, [metronome, isPlaying, isRecording, bpm, startMetronome, stopMetronome]);
 
   // ==============================
   //  RENDER
@@ -694,6 +759,7 @@ const App: React.FC = () => {
           onSelectTrack={handleSelectTrack}
           onUpdateTrack={handleUpdateTrack}
           onAddTrack={addTrack}
+          onDeleteTrack={handleDeleteTrack}
           onSeek={handleSeek}
         />
       </div>
