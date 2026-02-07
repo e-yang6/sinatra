@@ -1037,17 +1037,6 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
 
   return (
     <div className="h-screen w-screen flex flex-col bg-zinc-950 text-zinc-200 overflow-hidden">
-      {/* Back button */}
-      <div className="absolute top-4 left-4 z-30">
-        <button
-          onClick={() => navigate('/projects')}
-          className="flex items-center gap-2 px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded text-xs text-zinc-300 transition-colors"
-        >
-          <ArrowLeft size={14} />
-          Back to Projects
-        </button>
-      </div>
-
       <Header
         isPlaying={isPlaying}
         isRecording={isRecording}

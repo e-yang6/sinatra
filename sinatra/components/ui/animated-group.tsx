@@ -26,8 +26,8 @@ type AnimatedGroupProps = {
 
 const presetStyles: Record<PresetType, { hidden: React.CSSProperties; visible: React.CSSProperties }> = {
   fade: {
-    hidden: { opacity: 0 },
-    visible: { opacity: 1 },
+      hidden: { opacity: 0 },
+      visible: { opacity: 1 },
   },
   slide: {
     hidden: { opacity: 0, transform: 'translateY(20px)' },
@@ -38,8 +38,8 @@ const presetStyles: Record<PresetType, { hidden: React.CSSProperties; visible: R
     visible: { opacity: 1, transform: 'scale(1)' },
   },
   blur: {
-    hidden: { opacity: 0, filter: 'blur(4px)' },
-    visible: { opacity: 1, filter: 'blur(0px)' },
+      hidden: { opacity: 0, filter: 'blur(4px)' },
+      visible: { opacity: 1, filter: 'blur(0px)' },
   },
   'blur-slide': {
     hidden: { opacity: 0, filter: 'blur(4px)', transform: 'translateY(20px)' },

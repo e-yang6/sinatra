@@ -1,5 +1,6 @@
 import React from 'react';
-import { Play, Pause, Square, Mic, Volume2, Download } from 'lucide-react';
+import { Play, Pause, Square, Mic, Volume2, Download, ArrowLeft } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { UserProfile } from './UserProfile';
 
 const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
@@ -33,10 +34,19 @@ export const Header: React.FC<HeaderProps> = ({
   onMasterVolumeChange,
   onExport,
 }) => {
+  const navigate = useNavigate();
+
   return (
     <div className="h-16 border-b border-zinc-800 flex items-center justify-between px-4 relative">
-      {/* Left: Logo */}
-      <div className="flex items-center">
+      {/* Left: Back button and Logo */}
+      <div className="flex items-center gap-3">
+        <button
+          onClick={() => navigate('/projects')}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded text-xs text-zinc-300 hover:text-zinc-200 transition-colors"
+        >
+          <ArrowLeft size={12} />
+          Back
+        </button>
         <img 
           src={sinatraLogo} 
           alt="SINATRA" 
