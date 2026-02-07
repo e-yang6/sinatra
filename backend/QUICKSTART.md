@@ -23,7 +23,7 @@ py -3.12 --version
 
 ---
 
-## Terminal 1 — Backend
+## Terminal 1 — Backend (Windows)
 
 ```powershell
 cd backend
@@ -47,6 +47,26 @@ uvicorn main:app --reload --port 8000
 Server runs at **http://localhost:8000**
 
 Test it: open http://localhost:8000/health in your browser.
+
+---
+
+## Terminal 1 - Backend (MAC)
+
+# 1) Create and activate venv (Python 3.12)
+python3.12 -m venv venv
+source venv/bin/activate
+
+# 2) Install dependencies
+pip install -r requirements.txt
+
+# 3) Install FluidSynth (macOS)
+brew install fluidsynth
+
+# 4) Set SoundFont path (adjust if your filename differs)
+export SOUNDFONT_PATH="/Users/jeffreywongbusiness/Downloads/FluidR3_GM/FluidR3_GM.sf2"
+
+# 5) Run the backend
+uvicorn main:app --reload --port 8000
 
 ---
 

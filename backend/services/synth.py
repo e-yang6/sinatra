@@ -41,11 +41,44 @@ SOUNDFONT_PATH = os.environ.get(
 )
 
 # General MIDI program numbers for our instrument types
+# Based on General MIDI (GM) standard - 128 programs available
 INSTRUMENT_PROGRAMS = {
-    "Piano": 0,
-    "Synth": 80,     # Lead 1 (square)
-    "Strings": 48,   # String Ensemble 1
-    "Bass": 33,      # Electric Bass (finger)
+    # Piano
+    "Piano": 0,              # Acoustic Grand Piano
+    "Electric Piano": 4,     # Electric Piano 1
+    "Harpsichord": 6,        # Harpsichord
+    
+    # Strings
+    "Strings": 48,           # String Ensemble 1
+    "Violin": 40,            # Violin
+    "Cello": 42,             # Cello
+    
+    # Brass
+    "Trumpet": 56,           # Trumpet
+    "Trombone": 57,          # Trombone
+    "French Horn": 60,       # French Horn
+    
+    # Woodwinds
+    "Flute": 73,             # Flute
+    "Saxophone": 65,         # Alto Sax
+    "Clarinet": 71,          # Clarinet
+    
+    # Synth
+    "Synth": 80,             # Lead 1 (square)
+    "Synth Pad": 89,         # Pad 1 (new age)
+    "Synth Lead": 81,        # Lead 2 (sawtooth)
+    
+    # Bass
+    "Bass": 33,              # Electric Bass (finger)
+    "Acoustic Bass": 32,     # Acoustic Bass
+    
+    # Guitar
+    "Guitar": 24,            # Acoustic Guitar (nylon)
+    "Electric Guitar": 27,   # Electric Guitar (clean)
+    
+    # Other
+    "Organ": 19,             # Church Organ
+    "Drums": 128,            # Drums (channel 10, but we use 128 as marker)
 }
 
 SAMPLE_RATE = 44100

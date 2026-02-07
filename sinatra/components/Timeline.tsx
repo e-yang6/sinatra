@@ -145,14 +145,24 @@ export const Timeline: React.FC<TimelineProps> = ({
                     onVolumeChange={(vol) => onUpdateTrack(track.id, { volume: vol })}
                     onMuteToggle={() => onUpdateTrack(track.id, { isMuted: !track.isMuted })}
                     onColorChange={(color) => onUpdateTrack(track.id, { color })}
+                    onNameChange={(name) => onUpdateTrack(track.id, { name })}
+                    onSeek={onSeek}
                   >
                     {track.audioUrl ? (
                       <div
-                        className="h-full rounded-md overflow-hidden"
+                        className="h-full rounded-md overflow-hidden cursor-pointer hover:bg-zinc-800/20 transition-colors"
                         style={{
                           width: waveformWidthPx,
                           background: 'rgba(39, 39, 42, 0.3)',
                         }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = e.clientX - rect.left;
+                          const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                          onSeek(sec);
+                        }}
+                        title="Click to seek"
                       >
                         <Waveform audioUrl={track.audioUrl} numBars={numBars} color={track.color} />
                       </div>

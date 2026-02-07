@@ -25,6 +25,8 @@ interface TrackProps {
   onVolumeChange: (vol: number) => void;
   onMuteToggle: () => void;
   onColorChange: (color: string) => void;
+  onNameChange: (name: string) => void;
+  onSeek: (sec: number) => void;
 }
 
 export const Track: React.FC<TrackProps> = ({
@@ -37,8 +39,12 @@ export const Track: React.FC<TrackProps> = ({
   onVolumeChange,
   onMuteToggle,
   onColorChange,
+  onNameChange,
+  onSeek,
 }) => {
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editName, setEditName] = useState(track.name);
   const trackColor = track.color || TRACK_COLORS[0];
   
   const borderColorClass = isSelected
@@ -70,7 +76,49 @@ export const Track: React.FC<TrackProps> = ({
       >
         <div>
           <div className="flex items-center justify-between mb-1">
-            <h3 className="text-sm font-medium text-zinc-200 truncate flex-1">{track.name}</h3>
+            {isEditingName ? (
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                onBlur={() => {
+                  if (editName.trim()) {
+                    onNameChange(editName.trim());
+                  } else {
+                    setEditName(track.name);
+                  }
+                  setIsEditingName(false);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    if (editName.trim()) {
+                      onNameChange(editName.trim());
+                    } else {
+                      setEditName(track.name);
+                    }
+                    setIsEditingName(false);
+                  } else if (e.key === 'Escape') {
+                    setEditName(track.name);
+                    setIsEditingName(false);
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className="text-sm font-medium text-zinc-200 bg-zinc-800 border border-zinc-600 rounded px-1.5 py-0.5 flex-1 outline-none focus:border-accent"
+                autoFocus
+              />
+            ) : (
+              <h3
+                className="text-sm font-medium text-zinc-200 truncate flex-1 cursor-text hover:text-white transition-colors"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsEditingName(true);
+                  setEditName(track.name);
+                }}
+                title="Click to rename"
+              >
+                {track.name}
+              </h3>
+            )}
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -140,12 +188,24 @@ export const Track: React.FC<TrackProps> = ({
 
       {/* Track Content — scrolls horizontally */}
       <div
-        className={`relative rounded-r-xl border-2 border-l-0 bg-zinc-900/30 overflow-hidden ${borderColorClass}`}
+        className={`relative rounded-r-xl border-2 border-l-0 bg-zinc-900/30 overflow-hidden cursor-pointer ${borderColorClass}`}
         style={{
           width: contentWidth,
           minWidth: contentWidth,
           ...borderStyle,
         }}
+        onClick={(e) => {
+          // Only seek if clicking directly on the container background
+          const target = e.target as HTMLElement;
+          if (target === e.currentTarget) {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const PIXELS_PER_SECOND = 80;
+            const sec = Math.max(0, x / PIXELS_PER_SECOND);
+            onSeek(sec);
+          }
+        }}
+        title="Click to seek"
       >
         {children}
       </div>

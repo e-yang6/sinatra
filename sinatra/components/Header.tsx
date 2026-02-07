@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Square, Circle, Mic, Activity, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
@@ -24,6 +24,36 @@ export const Header: React.FC<HeaderProps> = ({
   onBpmChange,
   onMetronomeToggle,
 }) => {
+  const [bpmInput, setBpmInput] = useState(bpm.toString());
+  
+  // Sync input when BPM changes externally (e.g., from drum upload)
+  useEffect(() => {
+    setBpmInput(bpm.toString());
+  }, [bpm]);
+
+  const handleBpmChange = (value: string) => {
+    setBpmInput(value);
+  };
+
+  const handleBpmBlur = () => {
+    const val = parseInt(bpmInput);
+    if (isNaN(val) || val < 60) {
+      setBpmInput('60');
+      onBpmChange(60);
+    } else if (val > 200) {
+      setBpmInput('200');
+      onBpmChange(200);
+    } else {
+      onBpmChange(val);
+    }
+  };
+
+  const handleBpmKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.currentTarget.blur();
+    }
+  };
+
   return (
     <header className="h-16 border-b border-dark-border bg-dark-bg/95 flex items-center justify-between px-6 sticky top-0 z-50">
       <div className="flex items-center gap-4 w-48">
@@ -66,11 +96,16 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="h-6 w-[1px] bg-zinc-700 mx-2" />
 
         <div className="flex items-center gap-4">
-          <div className="flex flex-col items-center group cursor-pointer relative">
+          <div className="flex flex-col items-center group relative">
             <span className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider">BPM</span>
-            <div className="flex items-center gap-1">
-              <span className="text-lg font-mono font-medium text-zinc-200">{bpm}</span>
-            </div>
+            <input
+              type="text"
+              value={bpmInput}
+              onChange={(e) => handleBpmChange(e.target.value)}
+              onBlur={handleBpmBlur}
+              onKeyDown={handleBpmKeyDown}
+              className="text-lg font-mono font-medium text-zinc-200 bg-transparent border-none outline-none w-12 text-center focus:text-accent focus:bg-zinc-800/50 rounded px-1 transition-colors cursor-text hover:bg-zinc-800/30"
+            />
           </div>
           
           <button 
@@ -84,7 +119,14 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="w-48 flex justify-end">
-        <button className="text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-2">
+        <button 
+          onClick={() => {
+            if (window.confirm('Reset project? This will clear all tracks and recordings.')) {
+              window.location.reload();
+            }
+          }}
+          className="text-xs font-medium text-zinc-500 hover:text-zinc-300 transition-colors flex items-center gap-2"
+        >
           <RefreshCw size={14} />
           Reset Project
         </button>

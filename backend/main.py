@@ -75,11 +75,15 @@ async def upload_drum(file: UploadFile = File(...)):
 
 
 @app.post("/upload-vocal")
-async def upload_vocal(file: UploadFile = File(...)):
+async def upload_vocal(
+    file: UploadFile = File(...),
+    raw_audio: bool = Form(default=False),
+):
     """
     Upload a vocal WAV recording.
-    Converts it to MIDI using Basic Pitch.
-    Returns the MIDI filename.
+    If raw_audio=True, just stores the file (no MIDI conversion).
+    Otherwise, converts it to MIDI using librosa pYIN.
+    Returns the MIDI filename (or None if raw_audio).
     """
     if not file.filename.lower().endswith(".wav"):
         raise HTTPException(status_code=400, detail="Only WAV files are accepted.")
@@ -90,30 +94,55 @@ async def upload_vocal(file: UploadFile = File(...)):
         cleanup_file(file_path)
         raise HTTPException(status_code=400, detail="Invalid WAV file.")
 
-    try:
-        current_bpm = session.get("drum_bpm") or 120
-        midi_path = vocal_to_midi(file_path, bpm=current_bpm)
-    except Exception as e:
-        cleanup_file(file_path)
-        raise HTTPException(status_code=500, detail=f"MIDI transcription failed: {e}")
-
     # Store in session
     session["vocal_path"] = file_path
-    session["midi_path"] = midi_path
 
-    return {
-        "status": "ok",
-        "midi_filename": os.path.basename(midi_path),
-    }
+    if raw_audio:
+        # Raw audio mode: just store the file, no MIDI conversion
+        session["midi_path"] = None
+        return {
+            "status": "ok",
+            "midi_filename": None,
+            "raw_audio": True,
+        }
+    else:
+        # Convert to MIDI
+        try:
+            current_bpm = session.get("drum_bpm") or 120
+            midi_path = vocal_to_midi(file_path, bpm=current_bpm)
+        except Exception as e:
+            cleanup_file(file_path)
+            raise HTTPException(status_code=500, detail=f"MIDI transcription failed: {e}")
+
+        session["midi_path"] = midi_path
+        return {
+            "status": "ok",
+            "midi_filename": os.path.basename(midi_path),
+            "raw_audio": False,
+        }
 
 
 @app.post("/render")
 async def render(instrument: str = Form(default="Piano")):
     """
     Render the most recent MIDI file to a WAV using FluidSynth.
+    If raw_audio mode was used, just returns the original WAV file.
     Returns the WAV file for playback.
     """
+    # Check if we're in raw audio mode (no MIDI conversion)
+    vocal_path = session.get("vocal_path")
     midi_path = session.get("midi_path")
+    
+    if midi_path is None and vocal_path and os.path.exists(vocal_path):
+        # Raw audio mode: return the original file
+        session["rendered_path"] = vocal_path
+        return FileResponse(
+            vocal_path,
+            media_type="audio/wav",
+            filename="sinatra_raw_audio.wav",
+        )
+    
+    # MIDI mode: render MIDI to WAV
     if not midi_path or not os.path.exists(midi_path):
         raise HTTPException(
             status_code=400,
