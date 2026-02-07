@@ -138,12 +138,12 @@ export const TestimonialStack = ({ testimonials, visibleSides = 1, autoSwipeInte
           transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
         .pagination-dot.active {
-          background: #c9a961;
+          background: #3b82f6;
           width: 24px;
           border-radius: 4px;
         }
         .pagination-dot:hover {
-          background: rgba(201, 169, 97, 0.6);
+          background: rgba(59, 130, 246, 0.6);
         }
       `}</style>
       {testimonials.map((testimonial, index) => {
@@ -190,7 +190,7 @@ export const TestimonialStack = ({ testimonials, visibleSides = 1, autoSwipeInte
         }
 
         const tagClasses = (type: 'featured' | 'default') => type === 'featured' 
-          ? 'bg-[#c9a961]/20 text-[#c9a961] border border-[#c9a961]/30' 
+          ? 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30' 
           : 'bg-zinc-800 text-zinc-300 border border-zinc-700';
           
         return (

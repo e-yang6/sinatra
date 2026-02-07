@@ -438,6 +438,44 @@ async def generate_chords_endpoint(request: ChordRequest):
 # ==================== CHAT ENDPOINTS ====================
 
 
+class VoiceTranscribeResponse(BaseModel):
+    text: str
+
+
+@app.post("/voice-transcribe")
+async def voice_transcribe(file: UploadFile = File(...)):
+    """
+    Transcribe audio to text using the Gradium SDK.
+    Accepts WAV audio files from the frontend.
+    Returns the transcribed text.
+    """
+    gradium_api_key = os.environ.get("GRADIUM_API_KEY")
+    if not gradium_api_key:
+        raise HTTPException(status_code=500, detail="GRADIUM_API_KEY not configured on server.")
+
+    try:
+        import gradium
+    except ImportError:
+        raise HTTPException(status_code=500, detail="gradium package not installed. Run: pip install gradium")
+
+    audio_data = await file.read()
+    if len(audio_data) == 0:
+        raise HTTPException(status_code=400, detail="Empty audio file.")
+
+    try:
+        client = gradium.GradiumClient(
+            api_key=gradium_api_key,
+            base_url="https://us.api.gradium.ai/api/",
+        )
+        result = await client.stt(
+            setup=gradium.STTSetup(input_format="wav"),
+            audio=audio_data,
+        )
+        return {"text": result.text.strip() if result.text else ""}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
+
+
 class ChatRequest(BaseModel):
     message: str
     context: Optional[dict] = None

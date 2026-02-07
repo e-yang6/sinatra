@@ -19,6 +19,7 @@ interface VideoExportModalProps {
   drumAudioEl: HTMLAudioElement | null;
   bpm: number;
   masterVolume: number;
+  projectTitle?: string;
 }
 
 type RenderPhase = 'idle' | 'preparing' | 'recording' | 'done';
@@ -31,10 +32,12 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
   drumAudioEl,
   bpm,
   masterVolume,
+  projectTitle = 'My Track',
 }) => {
   // ---- Form state ----
-  const [songTitle, setSongTitle] = useState('My Track');
+  const [songTitle, setSongTitle] = useState(projectTitle);
   const [selectedTheme, setSelectedTheme] = useState('Happy');
+  const [exportType, setExportType] = useState<'video' | 'audio'>('video');
 
   // ---- Recording state ----
   const [phase, setPhase] = useState<RenderPhase>('idle');
@@ -81,6 +84,13 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
     }
   }, [isOpen]);
 
+  // Update songTitle when projectTitle changes
+  useEffect(() => {
+    if (projectTitle) {
+      setSongTitle(projectTitle);
+    }
+  }, [projectTitle]);
+
   // ---- Cleanup helper ----
   const cleanup = useCallback(() => {
     clearInterval(renderIntervalRef.current);
@@ -103,6 +113,18 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
     const a = document.createElement('a');
     a.href = url;
     a.download = `${filename}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, []);
+
+  // ---- Download audio file ----
+  const downloadAudio = useCallback((blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.wav`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -365,6 +387,197 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
     }
   }, [tracks, clipAudioMap, drumAudioEl, masterVolume, totalDuration, songTitle, cleanup, downloadVideo]);
 
+  // ---- Audio-only export ----
+  const startAudioRender = useCallback(async () => {
+    setRenderError(null);
+
+    const hasDrum = !!drumAudioEl?.src;
+    const drumTrack = tracks.find(t => t.id === '1');
+    const hasClips = tracks.some(t => t.id !== '1' && !t.isMuted && t.clips && t.clips.length > 0);
+
+    if (!hasClips && !hasDrum) {
+      setRenderError('No audio loaded. Record or upload audio first.');
+      return;
+    }
+    if (totalDuration <= 0) {
+      setRenderError('Project has no duration. Add some audio first.');
+      return;
+    }
+
+    renderCancelledRef.current = false;
+    setPhase('preparing');
+    setOverallPercent(0);
+    setPhaseLabel('Preparing audio...');
+
+    try {
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+
+      const masterGain = audioCtx.createGain();
+      masterGain.gain.value = masterVolume;
+
+      // Collect all audio jobs
+      interface AudioJob {
+        url: string;
+        volume: number;
+        startSec: number;
+        offsetSec: number;
+        durationSec: number;
+        loop: boolean;
+      }
+      const jobs: AudioJob[] = [];
+
+      // Drum track
+      if (hasDrum && drumTrack && !drumTrack.isMuted) {
+        jobs.push({
+          url: drumAudioEl!.src,
+          volume: drumTrack.volume,
+          startSec: 0,
+          offsetSec: 0,
+          durationSec: totalDuration,
+          loop: true,
+        });
+      }
+
+      // All clip tracks
+      tracks.forEach(track => {
+        if (track.id === '1' || track.isMuted || !track.clips) return;
+        track.clips.forEach(clip => {
+          const el = clipAudioMap.get(clip.id);
+          if (!el?.src) return;
+          jobs.push({
+            url: el.src,
+            volume: track.volume,
+            startSec: clip.startSec,
+            offsetSec: clip.offsetSec || 0,
+            durationSec: clip.durationSec,
+            loop: false,
+          });
+        });
+      });
+
+      if (jobs.length === 0) {
+        setRenderError('No audio sources found. Make sure your tracks have audio clips.');
+        setPhase('idle');
+        setOverallPercent(0);
+        audioCtx.close();
+        return;
+      }
+
+      // Decode all in parallel
+      const totalJobs = jobs.length;
+      setPhaseLabel(`Decoding audio (0/${totalJobs})...`);
+
+      const decodedBuffers = await Promise.all(
+        jobs.map(async (job, idx) => {
+          const buffer = await decodeAudioUrl(audioCtx, job.url);
+          setPhaseLabel(`Decoding audio (${idx + 1}/${totalJobs})...`);
+          setOverallPercent(Math.round(((idx + 1) / totalJobs) * 20));
+          return { ...job, buffer };
+        })
+      );
+
+      if (renderCancelledRef.current) {
+        cleanup();
+        setPhase('idle');
+        setOverallPercent(0);
+        return;
+      }
+
+      // Create offline context for rendering
+      const sampleRate = audioCtx.sampleRate;
+      const totalSamples = Math.ceil(totalDuration * sampleRate);
+      const offlineCtx = new OfflineAudioContext(1, totalSamples, sampleRate);
+      const offlineMasterGain = offlineCtx.createGain();
+      offlineMasterGain.gain.value = masterVolume;
+      offlineMasterGain.connect(offlineCtx.destination);
+
+      // Schedule all sources
+      const baseTime = 0.1;
+      for (const item of decodedBuffers) {
+        const sourceNode = offlineCtx.createBufferSource();
+        sourceNode.buffer = item.buffer;
+        sourceNode.loop = item.loop;
+
+        const gainNode = offlineCtx.createGain();
+        gainNode.gain.value = item.volume;
+        sourceNode.connect(gainNode);
+        gainNode.connect(offlineMasterGain);
+
+        const when = baseTime + item.startSec;
+        if (item.loop) {
+          sourceNode.loopStart = 0;
+          sourceNode.loopEnd = item.buffer.duration;
+          sourceNode.start(when, 0);
+          sourceNode.stop(baseTime + totalDuration + 0.5);
+        } else {
+          sourceNode.start(when, item.offsetSec, item.durationSec);
+        }
+      }
+
+      setPhase('recording');
+      setOverallPercent(30);
+      setPhaseLabel('Rendering audio...');
+
+      // Render to audio buffer
+      const renderedBuffer = await offlineCtx.startRendering();
+      const audioData = renderedBuffer.getChannelData(0);
+
+      // Convert to WAV
+      const wavBlob = encodeWav(audioData, sampleRate);
+      const safeName = songTitle.replace(/[^a-zA-Z0-9_ -]/g, '') || 'sinatra-export';
+      downloadAudio(wavBlob, safeName);
+
+      cleanup();
+      setOverallPercent(100);
+      setPhaseLabel('Done!');
+      setPhase('done');
+      setTimeout(() => {
+        setPhase('idle');
+        setOverallPercent(0);
+      }, 3000);
+
+    } catch (err) {
+      console.error('[Sinatra] Audio render error:', err);
+      const msg = err instanceof Error ? err.message : 'Audio render failed';
+      setRenderError(msg);
+      cleanup();
+      setPhase('idle');
+      setOverallPercent(0);
+    }
+  }, [tracks, clipAudioMap, drumAudioEl, masterVolume, totalDuration, songTitle, cleanup, downloadAudio]);
+
+  // WAV encoding helper
+  const encodeWav = (samples: Float32Array, sampleRate: number): Blob => {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+
+    function writeString(offset: number, str: string) {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+    }
+
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeString(36, 'data');
+    view.setUint32(40, samples.length * 2, true);
+
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  };
+
   const cancelRender = useCallback(() => {
     renderCancelledRef.current = true;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -394,7 +607,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">
-            <Film size={18} className="text-[#c9a961]" />
+            <Film size={18} className="text-[#3b82f6]" />
             <h2 className="text-base font-semibold text-zinc-100">Export</h2>
           </div>
           <button
@@ -416,11 +629,41 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
               onChange={(e) => setSongTitle(e.target.value)}
               placeholder="Enter song title..."
               disabled={isWorking}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-[#c9a961]/50 focus:ring-1 focus:ring-[#c9a961]/20 transition-colors disabled:opacity-50"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-[#3b82f6]/50 focus:ring-1 focus:ring-[#3b82f6]/20 transition-colors disabled:opacity-50"
             />
           </div>
 
-          {/* Theme Select */}
+          {/* Export Type */}
+          <div>
+            <label className="block text-xs font-medium text-zinc-400 mb-1.5">Export Type</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => !isWorking && setExportType('video')}
+                disabled={isWorking}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+                  exportType === 'video'
+                    ? 'bg-[#3b82f6]/15 border-[#3b82f6]/40 text-[#3b82f6]'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Video (with Visualizer)
+              </button>
+              <button
+                onClick={() => !isWorking && setExportType('audio')}
+                disabled={isWorking}
+                className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
+                  exportType === 'audio'
+                    ? 'bg-[#3b82f6]/15 border-[#3b82f6]/40 text-[#3b82f6]'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Audio Only
+              </button>
+            </div>
+          </div>
+
+          {/* Theme Select - only show for video */}
+          {exportType === 'video' && (
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Vibe / Theme</label>
             <div className="flex gap-2">
@@ -431,7 +674,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
                   disabled={isWorking}
                   className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                     selectedTheme === name
-                      ? 'bg-[#c9a961]/15 border-[#c9a961]/40 text-[#c9a961]'
+                      ? 'bg-[#3b82f6]/15 border-[#3b82f6]/40 text-[#3b82f6]'
                       : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
@@ -440,8 +683,10 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
               ))}
             </div>
           </div>
+          )}
 
-          {/* Live Preview */}
+          {/* Live Preview - only show for video */}
+          {exportType === 'video' && (
           <div>
             <label className="block text-xs font-medium text-zinc-400 mb-1.5">Preview</label>
             <div className="rounded-lg overflow-hidden border border-zinc-800 bg-black aspect-video">
@@ -458,6 +703,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
               Your full audio track plays over this visualizer in the exported video.
             </p>
           </div>
+          )}
 
           {/* Error */}
           {renderError && (
@@ -472,7 +718,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
               <div className="flex items-center justify-between text-xs text-zinc-400">
                 <span className="flex items-center gap-1.5">
                   {phase === 'preparing' ? (
-                    <Loader2 size={12} className="animate-spin text-[#c9a961]" />
+                    <Loader2 size={12} className="animate-spin text-[#3b82f6]" />
                   ) : (
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   )}
@@ -486,8 +732,8 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
                 <div
                   className={`h-full rounded-full transition-all duration-300 ease-out ${
                     phase === 'preparing'
-                      ? 'bg-[#c9a961]'
-                      : 'bg-gradient-to-r from-red-500 to-[#c9a961]'
+                      ? 'bg-[#3b82f6]'
+                      : 'bg-gradient-to-r from-red-500 to-[#3b82f6]'
                   }`}
                   style={{ width: `${overallPercent}%` }}
                 />
@@ -523,11 +769,11 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
                 Close
               </button>
               <button
-                onClick={startRender}
-                className="flex items-center gap-2 px-4 py-2 bg-[#c9a961]/20 hover:bg-[#c9a961]/30 border border-[#c9a961]/40 rounded-lg text-sm text-[#c9a961] hover:text-[#d4b872] transition-colors"
+                onClick={() => exportType === 'video' ? startRender() : startAudioRender()}
+                className="flex items-center gap-2 px-4 py-2 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 border border-[#3b82f6]/40 rounded-lg text-sm text-[#3b82f6] hover:text-[#60a5fa] transition-colors"
               >
                 <Download size={14} />
-                Render &amp; Download Video
+                {exportType === 'video' ? 'Render & Download Video' : 'Render & Download Audio'}
               </button>
             </>
           )}

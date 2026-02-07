@@ -1,35 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { MessageCircle, X, Send, Bot, User, Mic, MicOff, Trash2 } from 'lucide-react';
-import { sendChatMessage, clearChatHistory, ChatAction, ProjectContext } from '../api';
-
-// Web Speech API types
-interface SpeechRecognitionEvent extends Event {
-  results: SpeechRecognitionResultList;
-  resultIndex: number;
-}
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string;
-  message?: string;
-}
-interface SpeechRecognitionInstance extends EventTarget {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start(): void;
-  stop(): void;
-  abort(): void;
-  onresult: ((event: SpeechRecognitionEvent) => void) | null;
-  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
-  onend: (() => void) | null;
-  onstart: (() => void) | null;
-}
-declare global {
-  interface Window {
-    SpeechRecognition: new () => SpeechRecognitionInstance;
-    webkitSpeechRecognition: new () => SpeechRecognitionInstance;
-  }
-}
+import { sendChatMessage, clearChatHistory, transcribeVoice, ChatAction, ProjectContext } from '../api';
 
 interface Message {
   id: string;
@@ -58,15 +30,13 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isResizingRef = useRef(false);
-  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
-  const finalTranscriptRef = useRef('');
-  const autoSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const manualStopRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -157,149 +127,141 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
     }
   };
 
-  // ---- Speech-to-Text (Web Speech API) ----
-  const sendTranscript = useCallback(async (text: string) => {
-    if (!text.trim() || isLoading) return;
+  // ---- Convert webm blob to WAV so backend soundfile can read it ----
+  const convertBlobToWav = useCallback(async (blob: Blob): Promise<Blob> => {
+    const audioCtx = new AudioContext({ sampleRate: 24000 });
+    const arrayBuffer = await blob.arrayBuffer();
+    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+    audioCtx.close();
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text.trim(),
-      timestamp: new Date(),
+    // Downmix to mono
+    const channelData = audioBuffer.getChannelData(0);
+    const numSamples = channelData.length;
+
+    // Build WAV file
+    const wavBuffer = new ArrayBuffer(44 + numSamples * 2);
+    const view = new DataView(wavBuffer);
+
+    const writeString = (offset: number, str: string) => {
+      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
     };
 
-    setIsLoading(true);
-    setMessages(prev => [...prev, userMessage]);
+    writeString(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    writeString(8, 'WAVE');
+    writeString(12, 'fmt ');
+    view.setUint32(16, 16, true);           // chunk size
+    view.setUint16(20, 1, true);            // PCM
+    view.setUint16(22, 1, true);            // mono
+    view.setUint32(24, 24000, true);        // sample rate
+    view.setUint32(28, 24000 * 2, true);    // byte rate
+    view.setUint16(32, 2, true);            // block align
+    view.setUint16(34, 16, true);           // bits per sample
+    writeString(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+
+    // Write PCM samples
+    let offset = 44;
+    for (let i = 0; i < numSamples; i++) {
+      const s = Math.max(-1, Math.min(1, channelData[i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+
+    return new Blob([wavBuffer], { type: 'audio/wav' });
+  }, []);
+
+  // ---- Speech-to-Text (Gradium STT via MediaRecorder) ----
+  const startListening = useCallback(async () => {
+    if (isListening || isLoading) return;
 
     try {
-      const result = await sendChatMessage(text.trim(), projectContext);
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+      audioChunksRef.current = [];
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: result.response,
-        timestamp: new Date(),
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
       };
 
-      setMessages(prev => [...prev, assistantMessage]);
-      processActions(result.actions);
-    } catch (error: any) {
-      console.error('Voice chat error:', error);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}.`,
-        timestamp: new Date(),
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoading, projectContext, processActions]);
+      mediaRecorder.onstop = async () => {
+        // Stop all mic tracks
+        stream.getTracks().forEach(track => track.stop());
 
-  const startListening = useCallback(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Speech recognition is not supported in your browser. Please use Chrome or Edge.',
-        timestamp: new Date(),
-      }]);
-      return;
-    }
+        const webmBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        audioChunksRef.current = [];
 
-    // Clear any existing timer
-    if (autoSendTimerRef.current) {
-      clearTimeout(autoSendTimerRef.current);
-      autoSendTimerRef.current = null;
-    }
+        if (webmBlob.size === 0) return;
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
+        // Convert webm to WAV for backend compatibility, then transcribe via Gradium
+        setIsTranscribing(true);
+        try {
+          const wavBlob = await convertBlobToWav(webmBlob);
+          const transcribedText = await transcribeVoice(wavBlob);
 
-    finalTranscriptRef.current = '';
-    manualStopRef.current = false;
-    setInterimTranscript('');
-    setInput('');
+          if (!transcribedText.trim()) {
+            setIsTranscribing(false);
+            return;
+          }
 
-    recognition.onstart = () => {
-      setIsListening(true);
-    };
+          // Send transcribed text as a chat message
+          const userMessage: Message = {
+            id: Date.now().toString(),
+            role: 'user',
+            content: transcribedText.trim(),
+            timestamp: new Date(),
+          };
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      let interim = '';
-      let final = '';
+          setIsLoading(true);
+          setIsTranscribing(false);
+          setMessages(prev => [...prev, userMessage]);
 
-      for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result.isFinal) {
-          final += result[0].transcript + ' ';
-        } else {
-          interim += result[0].transcript;
+          const result = await sendChatMessage(transcribedText.trim(), projectContext);
+
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: result.response,
+            timestamp: new Date(),
+          };
+
+          setMessages(prev => [...prev, assistantMessage]);
+          processActions(result.actions);
+        } catch (error: any) {
+          console.error('Voice transcription/chat error:', error);
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}.`,
+            timestamp: new Date(),
+          }]);
+        } finally {
+          setIsLoading(false);
+          setIsTranscribing(false);
         }
-      }
+      };
 
-      finalTranscriptRef.current = final;
-      setInterimTranscript(interim);
-      setInput(final + interim);
-
-      // Reset auto-send timer — send 1.5s after user stops speaking
-      if (autoSendTimerRef.current) {
-        clearTimeout(autoSendTimerRef.current);
-      }
-      autoSendTimerRef.current = setTimeout(() => {
-        // User stopped speaking — stop recognition and auto-send
-        manualStopRef.current = true;
-        recognition.stop();
-      }, 1500);
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.error('Speech recognition error:', event.error);
-      if (event.error !== 'aborted' && event.error !== 'no-speech') {
-        setMessages(prev => [...prev, {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: `Speech recognition error: ${event.error}. Please try again.`,
-          timestamp: new Date(),
-        }]);
-      }
-      setIsListening(false);
-      setInterimTranscript('');
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      setInterimTranscript('');
-
-      const fullText = finalTranscriptRef.current.trim();
-      if (fullText) {
-        setInput('');
-        sendTranscript(fullText);
-      }
-
-      finalTranscriptRef.current = '';
-      if (autoSendTimerRef.current) {
-        clearTimeout(autoSendTimerRef.current);
-        autoSendTimerRef.current = null;
-      }
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  }, [sendTranscript]);
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsListening(true);
+    } catch (error: any) {
+      console.error('Microphone access error:', error);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: `Microphone access error: ${error?.message || 'Permission denied'}. Please allow microphone access.`,
+        timestamp: new Date(),
+      }]);
+    }
+  }, [isListening, isLoading, projectContext, processActions, convertBlobToWav]);
 
   const stopListening = useCallback(() => {
-    if (recognitionRef.current) {
-      manualStopRef.current = true;
-      recognitionRef.current.stop();
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
     }
-    if (autoSendTimerRef.current) {
-      clearTimeout(autoSendTimerRef.current);
-      autoSendTimerRef.current = null;
-    }
+    setIsListening(false);
   }, []);
 
   const handleVoiceToggle = useCallback(() => {
@@ -313,11 +275,8 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.abort();
-      }
-      if (autoSendTimerRef.current) {
-        clearTimeout(autoSendTimerRef.current);
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+        mediaRecorderRef.current.stop();
       }
     };
   }, []);
@@ -375,7 +334,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-2">
-            <Bot size={16} className="text-[#c9a961]" />
+            <Bot size={16} className="text-[#3b82f6]" />
             <span className="text-sm font-medium text-zinc-300">Frank</span>
             <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">OpenRouter</span>
           </div>
@@ -406,13 +365,13 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
             >
               {message.role === 'assistant' && (
                 <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 mt-1">
-                  <Bot size={12} className="text-[#c9a961]" />
+                  <Bot size={12} className="text-[#3b82f6]" />
                 </div>
               )}
               <div
                 className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                   message.role === 'user'
-                    ? 'bg-[#c9a961]/20 text-zinc-200'
+                    ? 'bg-[#3b82f6]/20 text-zinc-200'
                     : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
                 }`}
               >
@@ -431,7 +390,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
                     [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-600 [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-zinc-400 [&_blockquote]:italic
                     [&_strong]:text-zinc-200 [&_strong]:font-semibold
                     [&_em]:text-zinc-300
-                    [&_a]:text-[#c9a961] [&_a]:underline
+                    [&_a]:text-[#3b82f6] [&_a]:underline
                     [&_hr]:border-zinc-700 [&_hr]:my-2
                     [&_table]:text-xs [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-700 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-700
                   ">
@@ -454,7 +413,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           {isLoading && (
             <div className="flex gap-3 justify-start">
               <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 mt-1">
-                <Bot size={12} className="text-[#c9a961]" />
+                <Bot size={12} className="text-[#3b82f6]" />
               </div>
               <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="flex gap-1">
@@ -468,18 +427,13 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Voice listening indicator */}
-        {isListening && (
+        {/* Voice listening / transcribing indicator */}
+        {(isListening || isTranscribing) && (
           <div className="px-4 py-2 bg-emerald-950/30 border-t border-emerald-900/30 flex items-center gap-2 shrink-0">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
             <span className="text-xs text-emerald-400">
-              Listening{interimTranscript ? '...' : ' — speak now'}
+              {isTranscribing ? 'Transcribing with Gradium...' : 'Recording — speak now, click mic to stop'}
             </span>
-            {interimTranscript && (
-              <span className="text-xs text-zinc-400 italic truncate flex-1">
-                {interimTranscript}
-              </span>
-            )}
           </div>
         )}
 
@@ -488,13 +442,15 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           <div className="flex gap-2">
             <button
               onClick={handleVoiceToggle}
-              disabled={isLoading}
+              disabled={isLoading || isTranscribing}
               className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-center ${
                 isListening
                   ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 animate-pulse'
-                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+                  : isTranscribing
+                    ? 'bg-[#3b82f6]/20 text-[#3b82f6] cursor-wait animate-pulse'
+                    : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isListening ? 'Stop listening' : 'Start voice input (hands-free)'}
+              title={isListening ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice input (Gradium STT)'}
             >
               {isListening ? <MicOff size={16} /> : <Mic size={16} />}
             </button>
@@ -503,25 +459,25 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder={isListening ? 'Speak now...' : 'Ask me anything...'}
+              placeholder={isListening ? 'Recording... click mic to stop' : isTranscribing ? 'Transcribing...' : 'Ask me anything...'}
               className={`flex-1 bg-zinc-900 border rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none resize-none overflow-y-auto ${
                 isListening ? 'border-emerald-800 focus:border-emerald-700' : 'border-zinc-800 focus:border-zinc-700'
               }`}
               rows={1}
               style={{ minHeight: '40px', maxHeight: '120px' }}
-              readOnly={isListening}
+              readOnly={isListening || isTranscribing}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isLoading || isListening}
-              className="px-4 py-2 bg-[#c9a961]/20 hover:bg-[#c9a961]/30 text-[#c9a961] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              disabled={!input.trim() || isLoading || isListening || isTranscribing}
+              className="px-4 py-2 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 text-[#3b82f6] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               title="Send message"
             >
               <Send size={16} />
             </button>
           </div>
           <div className="text-[10px] text-zinc-600 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line • Click mic for hands-free voice
+            Press Enter to send, Shift+Enter for new line • Click mic for Gradium voice input
           </div>
         </div>
       </div>

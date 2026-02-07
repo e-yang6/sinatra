@@ -7,6 +7,7 @@ import { Chatbot } from './components/Chatbot';
 import VideoExportModal from './components/VideoExportModal';
 import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
 import { uploadDrum, uploadVocal, renderMidi, reRenderMidi, uploadSample, generateChords, ChatAction, ProjectContext } from './api';
+import { supabase } from './lib/supabase';
 
 // ---- WAV encoding utility ----
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -79,6 +80,9 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Project state ----
+  const [projectTitle, setProjectTitle] = useState<string>('My Track');
 
   // ---- Custom sample state ----
   const [sampleName, setSampleName] = useState<string | undefined>();
@@ -1207,6 +1211,44 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   }, [metronome, isPlaying, isRecording, bpm, startMetronome, stopMetronome]);
 
   // ==============================
+  //  PROJECT LOADING
+  // ==============================
+  useEffect(() => {
+    if (projectId) {
+      const loadProject = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('projects')
+            .select('name')
+            .eq('id', projectId)
+            .single();
+
+          if (error) throw error;
+          if (data?.name) {
+            setProjectTitle(data.name);
+          }
+        } catch (err) {
+          console.error('[Sinatra] Error loading project:', err);
+          // Fallback to localStorage if Supabase fails
+          try {
+            const localProjects = localStorage.getItem(`projects_${projectId}`);
+            if (localProjects) {
+              const projects = JSON.parse(localProjects);
+              const project = Array.isArray(projects) ? projects.find((p: any) => p.id === projectId) : projects;
+              if (project?.name) {
+                setProjectTitle(project.name);
+              }
+            }
+          } catch (e) {
+            console.error('[Sinatra] Error loading from localStorage:', e);
+          }
+        }
+      };
+      loadProject();
+    }
+  }, [projectId]);
+
+  // ==============================
   //  EXPORT (opens the video/audio export modal)
   // ==============================
   const handleExport = () => {
@@ -1456,6 +1498,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         drumAudioEl={drumAudioElRef.current}
         bpm={bpm}
         masterVolume={masterVolume}
+        projectTitle={projectTitle}
       />
     </div>
   );

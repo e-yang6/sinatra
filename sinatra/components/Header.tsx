@@ -126,7 +126,7 @@ export const Header: React.FC<HeaderProps> = ({
         {onExport && (
           <button
             onClick={onExport}
-            className="px-2.5 py-1 border border-[#c9a961]/30 rounded text-xs text-[#c9a961]/80 hover:text-[#c9a961] hover:border-[#c9a961]/50 transition-colors flex items-center justify-center gap-2"
+            className="px-2.5 py-1 border border-[#3b82f6]/30 rounded text-xs text-[#3b82f6]/80 hover:text-[#3b82f6] hover:border-[#3b82f6]/50 transition-colors flex items-center justify-center gap-2"
           >
             <Download size={12} />
             Export

@@ -576,12 +576,9 @@ const NCSVisualizer = React.forwardRef<HTMLCanvasElement, NCSVisualizerProps>(
           ctx.font = `700 ${fontSize}px system-ui, -apple-system, "Segoe UI", sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.shadowColor = primaryColor;
-          ctx.shadowBlur = 12 + bassLevel * 18;
           ctx.fillStyle = `rgba(255,255,255,${0.88 + bassLevel * 0.12})`;
           const textY = cy + ringPulse + 50 + bassLevel * 6;
           ctx.fillText(songTitle, cx, textY);
-          ctx.shadowBlur = 0;
           ctx.font = `400 ${fontSize * 0.4}px system-ui, -apple-system, "Segoe UI", sans-serif`;
           ctx.fillStyle = `rgba(${primRgb[0]},${primRgb[1]},${primRgb[2]},0.55)`;
           ctx.fillText('Made with Sinatra', cx, textY + fontSize * 0.8);
