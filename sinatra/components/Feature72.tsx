@@ -50,7 +50,7 @@ export const Feature72 = ({
   ],
 }: Feature72Props) => {
   return (
-    <section className="py-32">
+    <section className="pt-24 pb-32">
       <div className="container flex flex-col gap-16 lg:px-16 mx-auto max-w-7xl px-6">
         <div className="lg:max-w-2xl">
           <h2 className="mb-3 text-xl font-light text-zinc-100 md:mb-4 md:text-4xl lg:mb-6 tracking-tighter">

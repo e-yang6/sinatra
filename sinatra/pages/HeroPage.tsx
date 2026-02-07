@@ -14,9 +14,11 @@ import {
 } from '../components/ui/carousel';
 import AutoplayPlugin from 'embla-carousel-autoplay';
 import { Feature72 } from '../components/Feature72';
+import { Footer } from '../components/Footer';
+import { Github, Twitter, Instagram, Linkedin } from 'lucide-react';
 
 const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
-const earlyDemoVideo = new URL('../assets/EarlyDemo.mp4', import.meta.url).href;
+const earlyDemoVideo = new URL('../assets/Demo.mp4', import.meta.url).href;
 
 const transitionVariants = {
   item: {
@@ -205,9 +207,9 @@ const ArtistsCarousel: React.FC = () => {
     };
   }, [api, carouselAssets.length]);
 
-  return (
-    <div className="w-full py-20 lg:py-40">
-      <div className="container mx-auto max-w-7xl px-6">
+    return (
+      <div className="w-full pt-20 pb-16 lg:pt-40 lg:pb-24">
+        <div className="container mx-auto max-w-7xl px-6">
         <div className="flex flex-col gap-10">
           <h2 className="text-xl md:text-3xl lg:text-5xl tracking-tighter lg:max-w-xl font-light text-left text-zinc-100">
             Trusted by thousands of artists worldwide.
@@ -388,6 +390,54 @@ export const HeroPage: React.FC = () => {
                 image: "https://www.shadcnblocks.com/images/block/placeholder-3.svg",
               },
             ]}
+          />
+
+          {/* Footer */}
+          <Footer
+            logo={
+              <img 
+                src={sinatraLogo} 
+                alt="SINATRA" 
+                className="h-6 w-auto" 
+              />
+            }
+            brandName="Sinatra"
+            socialLinks={[
+              {
+                icon: <Github className="h-5 w-5" />,
+                href: "https://github.com",
+                label: "GitHub"
+              },
+              {
+                icon: <Twitter className="h-5 w-5" />,
+                href: "https://twitter.com",
+                label: "Twitter"
+              },
+              {
+                icon: <Instagram className="h-5 w-5" />,
+                href: "https://instagram.com",
+                label: "Instagram"
+              },
+              {
+                icon: <Linkedin className="h-5 w-5" />,
+                href: "https://linkedin.com",
+                label: "LinkedIn"
+              },
+            ]}
+            mainLinks={[
+              { href: "#features", label: "Features" },
+              { href: "#how-it-works", label: "How It Works" },
+              { href: "#examples", label: "Examples" },
+              { href: "#support", label: "Support" },
+            ]}
+            legalLinks={[
+              { href: "#privacy", label: "Privacy Policy" },
+              { href: "#terms", label: "Terms of Service" },
+              { href: "#cookies", label: "Cookie Policy" },
+            ]}
+            copyright={{
+              text: `© ${new Date().getFullYear()} Sinatra. All rights reserved.`,
+            }}
           />
         </main>
       </>
