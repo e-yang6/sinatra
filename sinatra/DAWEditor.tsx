@@ -4,8 +4,10 @@ import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
 import { Chatbot } from './components/Chatbot';
+import VideoExportModal from './components/VideoExportModal';
 import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
 import { uploadDrum, uploadVocal, renderMidi, reRenderMidi, uploadSample, generateChords, ChatAction, ProjectContext } from './api';
+import { supabase } from './lib/supabase';
 
 // ---- WAV encoding utility ----
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -79,6 +81,9 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [error, setError] = useState<string | null>(null);
 
+  // ---- Project state ----
+  const [projectTitle, setProjectTitle] = useState<string>('My Track');
+
   // ---- Custom sample state ----
   const [sampleName, setSampleName] = useState<string | undefined>();
   const [sampleNote, setSampleNote] = useState<string | undefined>();
@@ -113,6 +118,9 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
 
   // ---- Chatbot state ----
   const [chatbotWidth, setChatbotWidth] = useState(400);
+
+  // ---- Video export modal state ----
+  const [isVideoExportOpen, setIsVideoExportOpen] = useState(false);
 
   // ---- Undo/Redo state ----
   const [history, setHistory] = useState<TrackData[][]>([INITIAL_TRACKS]);
@@ -1203,37 +1211,48 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   }, [metronome, isPlaying, isRecording, bpm, startMetronome, stopMetronome]);
 
   // ==============================
-  //  EXPORT
+  //  PROJECT LOADING
   // ==============================
-  const handleExport = async () => {
-    try {
-      setStatusMessage('Exporting...');
-      // Find tracks with clips
-      const tracksWithClips = tracks.filter(t => t.clips && t.clips.length > 0);
-      if (tracksWithClips.length === 0) {
-        setError('No tracks to export');
-        return;
-      }
+  useEffect(() => {
+    if (projectId) {
+      const loadProject = async () => {
+        try {
+          const { data, error } = await supabase
+            .from('projects')
+            .select('name')
+            .eq('id', projectId)
+            .single();
 
-      // Export first clip of first track (simplified)
-      const firstClip = tracksWithClips[0].clips![0];
-      if (firstClip?.audioUrl) {
-        const response = await fetch(firstClip.audioUrl);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `sinatra-export-${Date.now()}.wav`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setStatusMessage('Export complete');
-      }
-    } catch (err) {
-      setError('Export failed');
-      setStatusMessage('Error');
+          if (error) throw error;
+          if (data?.name) {
+            setProjectTitle(data.name);
+          }
+        } catch (err) {
+          console.error('[Sinatra] Error loading project:', err);
+          // Fallback to localStorage if Supabase fails
+          try {
+            const localProjects = localStorage.getItem(`projects_${projectId}`);
+            if (localProjects) {
+              const projects = JSON.parse(localProjects);
+              const project = Array.isArray(projects) ? projects.find((p: any) => p.id === projectId) : projects;
+              if (project?.name) {
+                setProjectTitle(project.name);
+              }
+            }
+          } catch (e) {
+            console.error('[Sinatra] Error loading from localStorage:', e);
+          }
+        }
+      };
+      loadProject();
     }
+  }, [projectId]);
+
+  // ==============================
+  //  EXPORT (opens the video/audio export modal)
+  // ==============================
+  const handleExport = () => {
+    setIsVideoExportOpen(true);
   };
 
   // ==============================
@@ -1469,6 +1488,17 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         recordingSessions={recordingSessions}
         currentPeakLevel={currentPeakLevel}
         currentAvgLevel={currentAvgLevel}
+      />
+
+      <VideoExportModal
+        isOpen={isVideoExportOpen}
+        onClose={() => setIsVideoExportOpen(false)}
+        tracks={tracks}
+        clipAudioMap={clipAudioMapRef.current}
+        drumAudioEl={drumAudioElRef.current}
+        bpm={bpm}
+        masterVolume={masterVolume}
+        projectTitle={projectTitle}
       />
     </div>
   );

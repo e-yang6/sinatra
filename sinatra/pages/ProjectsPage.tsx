@@ -556,7 +556,7 @@ export const ProjectsPage: React.FC = () => {
                       onDragLeave={handleDragLeave}
                       className={`relative border-2 border-dashed rounded-lg p-4 transition-all ${
                         isDragging
-                          ? 'border-[#c9a961] bg-[#c9a961]/10'
+                          ? 'border-[#3b82f6] bg-[#3b82f6]/10'
                           : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/50'
                       }`}
                     >
@@ -583,7 +583,7 @@ export const ProjectsPage: React.FC = () => {
                           </p>
                           <p className="text-xs text-zinc-600 text-center mb-2">or</p>
                           <label className="cursor-pointer">
-                            <span className="text-xs text-[#c9a961] hover:text-[#b89a51] transition-colors">
+                            <span className="text-xs text-[#3b82f6] hover:text-[#2563eb] transition-colors">
                               Browse files
                             </span>
                             <input

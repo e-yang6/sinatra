@@ -242,6 +242,28 @@ export interface ProjectContext {
 }
 
 /**
+ * Send audio to backend for Groq Whisper transcription.
+ * Returns the transcribed text.
+ */
+export async function transcribeVoice(audioBlob: Blob): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'voice.wav');
+
+  const response = await fetch(`${API_BASE}/voice-transcribe`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Transcription failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.text;
+}
+
+/**
  * Send a text message to Frank (AI chatbot)
  */
 export async function sendChatMessage(
