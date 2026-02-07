@@ -31,7 +31,7 @@ export function Footer({
   copyright,
 }: FooterProps) {
   return (
-    <footer className="pb-6 pt-16 lg:pb-8 lg:pt-24 border-t border-zinc-800/50">
+    <footer className="pb-6 pt-16 lg:pb-8 lg:pt-24 border-t border-slate-300">
       <div className="px-4 lg:px-8 max-w-7xl mx-auto">
         <div className="md:flex md:items-start md:justify-between">
           <a
@@ -40,7 +40,7 @@ export function Footer({
             aria-label={brandName}
           >
             {logo}
-            <span className="font-light text-xl text-zinc-100">{brandName}</span>
+            <span className="font-light text-xl text-slate-900">{brandName}</span>
           </a>
           <ul className="flex list-none mt-6 md:mt-0 space-x-3">
             {socialLinks.map((link, i) => (
@@ -48,7 +48,7 @@ export function Footer({
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="h-10 w-10 rounded-full bg-zinc-900/50 border border-zinc-800/50 hover:border-[#c9a961]/50 hover:bg-zinc-900/70 text-zinc-400 hover:text-[#c9a961]"
+                  className="h-10 w-10 rounded-full bg-slate-100 border border-slate-300 hover:border-[#3b82f6]/50 hover:bg-slate-200 text-slate-700 hover:text-[#3b82f6]"
                   asChild
                 >
                   <a href={link.href} target="_blank" rel="noopener noreferrer" aria-label={link.label}>
@@ -59,14 +59,14 @@ export function Footer({
             ))}
           </ul>
         </div>
-        <div className="border-t border-zinc-800/50 mt-6 pt-6 md:mt-4 md:pt-8 lg:grid lg:grid-cols-10">
+        <div className="border-t border-slate-300 mt-6 pt-6 md:mt-4 md:pt-8 lg:grid lg:grid-cols-10">
           <nav className="lg:mt-0 lg:col-[4/11]">
             <ul className="list-none flex flex-wrap -my-1 -mx-2 lg:justify-end">
               {mainLinks.map((link, i) => (
                 <li key={i} className="my-1 mx-2 shrink-0">
                   <a
                     href={link.href}
-                    className="text-sm text-zinc-400 hover:text-[#c9a961] underline-offset-4 hover:underline transition-colors"
+                    className="text-sm text-slate-700 hover:text-[#3b82f6] underline-offset-4 hover:underline transition-colors"
                   >
                     {link.label}
                   </a>
@@ -80,7 +80,7 @@ export function Footer({
                 <li key={i} className="my-1 mx-3 shrink-0">
                   <a
                     href={link.href}
-                    className="text-sm text-zinc-500 hover:text-zinc-400 underline-offset-4 hover:underline transition-colors"
+                    className="text-sm text-slate-600 hover:text-slate-800 underline-offset-4 hover:underline transition-colors"
                   >
                     {link.label}
                   </a>
@@ -88,7 +88,7 @@ export function Footer({
               ))}
             </ul>
           </div>
-          <div className="mt-6 text-sm leading-6 text-zinc-500 whitespace-nowrap lg:mt-0 lg:row-[1/3] lg:col-[1/4]">
+          <div className="mt-6 text-sm leading-6 text-slate-600 whitespace-nowrap lg:mt-0 lg:row-[1/3] lg:col-[1/4]">
             <div>{copyright.text}</div>
             {copyright.license && <div>{copyright.license}</div>}
           </div>

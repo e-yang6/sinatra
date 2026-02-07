@@ -18,13 +18,13 @@
             },
             colors: {
               accent: {
-                DEFAULT: '#c9a961',
-                hover: '#b8860b',
+                DEFAULT: '#3b82f6',
+                hover: '#2563eb',
               },
               dark: {
-                bg: '#0a0a0a',
-                surface: '#18181b',
-                border: '#27272a',
+                bg: '#ffffff',
+                surface: '#f8fafc',
+                border: '#e2e8f0',
               }
             }
           }
@@ -38,8 +38,8 @@
       }
       
       body {
-        background-color: #0a0a0a;
-        color: #d4d4d8;
+        background-color: #ffffff;
+        color: #1e293b;
       }
       
       ::-webkit-scrollbar {
@@ -47,27 +47,46 @@
         height: 4px;
       }
       ::-webkit-scrollbar-track {
-        background: #0a0a0a; 
+        background: #f1f5f9; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #27272a; 
+        background: #cbd5e1; 
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #3f3f46; 
+        background: #94a3b8; 
       }
       
-      /* Style select dropdown options to match dark theme */
+      /* Style select dropdown options to match light theme */
       select {
-        color-scheme: dark;
+        color-scheme: light;
       }
       
       select option {
-        background-color: #18181b;
-        color: #d4d4d8;
+        background-color: #ffffff;
+        color: #1e293b;
       }
       
       select:focus option:checked {
-        background-color: #27272a;
+        background-color: #f1f5f9;
+      }
+
+      /* Shimmer text effect */
+      @keyframes shimmer {
+        0% { background-position: -200% 0; }
+        100% { background-position: 200% 0; }
+      }
+      .animate-shimmer {
+        background-size: 200% 100%;
+        animation: shimmer 2.2s linear infinite;
+      }
+
+      /* Typewriter cursor blink */
+      @keyframes cursor-blink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+      }
+      .animate-cursor-blink {
+        animation: cursor-blink 0.8s step-end infinite;
       }
     </style>
   <script type="importmap">

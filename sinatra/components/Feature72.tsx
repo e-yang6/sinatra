@@ -53,16 +53,16 @@ export const Feature72 = ({
     <section className="pt-24 pb-32">
       <div className="container flex flex-col gap-16 lg:px-16 mx-auto max-w-7xl px-6">
         <div className="lg:max-w-2xl">
-          <h2 className="mb-3 text-xl font-light text-zinc-100 md:mb-4 md:text-4xl lg:mb-6 tracking-tighter">
+          <h2 className="mb-3 text-xl font-light text-slate-900 md:mb-4 md:text-4xl lg:mb-6 tracking-tighter">
             {heading}
           </h2>
-          <p className="text-zinc-400 lg:text-lg">{description}</p>
+          <p className="text-slate-700 lg:text-lg">{description}</p>
         </div>
         <div className="grid gap-6 md:grid-cols-3 lg:gap-6">
           {features.map((feature) => (
             <div
               key={feature.id}
-              className="flex flex-col overflow-clip rounded-xl border border-zinc-800/50 bg-zinc-900/30 hover:border-[#c9a961]/30 transition-all duration-300"
+              className="flex flex-col overflow-clip rounded-xl border border-slate-300 bg-slate-50 hover:border-[#3b82f6]/30 transition-all duration-300"
             >
               <div>
                 <img
@@ -72,10 +72,10 @@ export const Feature72 = ({
                 />
               </div>
               <div className="px-4 py-6 md:px-6 md:py-8 lg:px-6 lg:py-8">
-                <h3 className="mb-2 text-base font-light text-zinc-100 md:mb-3 md:text-xl lg:mb-4 tracking-tighter">
+                <h3 className="mb-2 text-base font-light text-slate-900 md:mb-3 md:text-xl lg:mb-4 tracking-tighter">
                   {feature.title}
                 </h3>
-                <p className="text-sm text-zinc-400 md:text-base">
+                <p className="text-sm text-slate-700 md:text-base">
                   {feature.description}
                 </p>
               </div>

@@ -74,13 +74,13 @@ const HeroHeader: React.FC = () => {
     <header>
       <nav
         data-state={menuState ? 'active' : undefined}
-        className="fixed z-20 w-full px-2 group bg-zinc-950/0">
+        className="fixed z-20 w-full px-2 group bg-white/0">
         <div className={cn(
           'mx-auto mt-2 px-6 border rounded-2xl transition-[max-width,padding,background-color,border-color,backdrop-filter] duration-700 ease-out',
           isInitialLoad 
-            ? 'max-w-4xl bg-zinc-950/50 border-zinc-800 backdrop-blur-lg lg:px-5'
+            ? 'max-w-4xl bg-white/80 border-slate-300 backdrop-blur-lg lg:px-5'
             : isScrolled
-              ? 'max-w-4xl bg-zinc-950/50 border-zinc-800 backdrop-blur-lg lg:px-5'
+              ? 'max-w-4xl bg-white/80 border-slate-300 backdrop-blur-lg lg:px-5'
               : 'max-w-6xl border-transparent lg:px-12'
         )}>
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
@@ -113,7 +113,7 @@ const HeroHeader: React.FC = () => {
                   <li key={index}>
                     <a
                       href={item.href}
-                      className="text-zinc-400 hover:text-zinc-200 block duration-150">
+                      className="text-slate-700 hover:text-slate-900 block duration-150">
                       <span>{item.name}</span>
                     </a>
                   </li>
@@ -122,7 +122,7 @@ const HeroHeader: React.FC = () => {
             </div>
 
             <div className={cn(
-              "bg-zinc-950 mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border border-zinc-800 p-6 shadow-2xl shadow-zinc-300/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent",
+              "bg-white mb-6 hidden w-full flex-wrap items-center justify-end space-y-8 rounded-3xl border border-slate-300 p-6 shadow-2xl shadow-slate-200/20 md:flex-nowrap lg:m-0 lg:flex lg:w-fit lg:gap-6 lg:space-y-0 lg:border-transparent lg:bg-transparent lg:p-0 lg:shadow-none dark:shadow-none dark:lg:bg-transparent",
               menuState && "lg:group-data-[state=active]:flex block"
             )}>
               <div className="lg:hidden">
@@ -141,7 +141,7 @@ const HeroHeader: React.FC = () => {
               <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
                 <Button
                   size="sm"
-                  className="bg-[#c9a961] hover:bg-[#b89a51] text-zinc-950"
+                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white"
                   onClick={() => {
                     if (user) {
                       navigate('/projects');
@@ -211,7 +211,7 @@ const ArtistsCarousel: React.FC = () => {
       <div className="w-full pt-20 pb-16 lg:pt-40 lg:pb-24">
         <div className="container mx-auto max-w-7xl px-6">
         <div className="flex flex-col gap-10">
-          <h2 className="text-xl md:text-3xl lg:text-5xl tracking-tighter lg:max-w-xl font-light text-left text-zinc-100">
+          <h2 className="text-xl md:text-3xl lg:text-5xl tracking-tighter lg:max-w-xl font-light text-left text-slate-900">
             Trusted by thousands of artists worldwide.
           </h2>
           <Carousel 
@@ -228,7 +228,7 @@ const ArtistsCarousel: React.FC = () => {
             <CarouselContent className="-ml-2 md:-ml-4">
               {duplicatedLogos.map((logoSrc, index) => (
                 <CarouselItem className="pl-2 md:pl-4 basis-1/4 lg:basis-1/6" key={index}>
-                  <div className="flex rounded-xl aspect-square bg-zinc-900/30 border border-zinc-800/30 items-center justify-center p-2 hover:border-[#c9a961]/50 hover:bg-zinc-900/50 transition-all duration-300 overflow-hidden">
+                  <div className="flex rounded-xl aspect-square bg-slate-100 border border-slate-300 items-center justify-center p-2 hover:border-[#3b82f6]/50 hover:bg-slate-200 transition-all duration-300 overflow-hidden">
                     <img 
                       src={logoSrc} 
                       alt={`Artist logo ${index + 1}`}
@@ -257,8 +257,8 @@ export const HeroPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-zinc-950">
-        <div className="text-zinc-500">Loading...</div>
+      <div className="h-screen w-screen flex items-center justify-center bg-white">
+        <div className="text-slate-500">Loading...</div>
       </div>
     );
   }
@@ -307,9 +307,9 @@ export const HeroPage: React.FC = () => {
                 },
               }}
               className="absolute inset-0 -z-20">
-              <div className="absolute inset-x-0 top-56 -z-20 hidden lg:top-32 lg:block bg-zinc-950" />
+              <div className="absolute inset-x-0 top-56 -z-20 hidden lg:top-32 lg:block bg-white" />
             </AnimatedGroup>
-            <div aria-hidden className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,rgb(9_9_11)_75%)]" />
+            <div aria-hidden className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,rgb(255_255_255)_75%)]" />
             <div className="mx-auto max-w-7xl px-6">
               <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
                 <AnimatedGroup 
@@ -324,11 +324,23 @@ export const HeroPage: React.FC = () => {
                     },
                     ...transitionVariants,
                   }}>
-                    <h1 className="mt-12 max-w-4xl mx-auto text-balance text-4xl md:text-5xl lg:mt-16 xl:text-6xl font-light text-zinc-100 tracking-tighter">
-                      Bring your music to the moon.
+                    <h1 className="mt-12 max-w-4xl mx-auto text-balance text-4xl md:text-5xl lg:mt-16 xl:text-6xl font-light text-slate-900 tracking-tighter">
+                      Fly your music{' '}
+                      <span
+                        className="relative group inline-block cursor-pointer select-none"
+                        style={{ perspective: 800 }}
+                      >
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3b82f6] via-[#60a5fa] to-[#3b82f6] transition-all duration-700 ease-out inline-block">
+                          to the moon.
+                        </span>
+                        <span
+                          className="pointer-events-none absolute inset-0 rounded bg-gradient-to-r from-[#3b82f6]/0 via-[#60a5fa]/30 to-[#3b82f6]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-shimmer"
+                          style={{ mixBlendMode: 'overlay' }}
+                        />
+                      </span>
                     </h1>
 
-                    <p className="mt-4 max-w-2xl mx-auto text-balance text-lg text-zinc-400">
+                    <p className="mt-4 max-w-2xl mx-auto text-balance text-lg text-slate-600">
                       Sinatra empowers anyone to make music, easily. 
                     </p>
                   </AnimatedGroup>
@@ -349,7 +361,7 @@ export const HeroPage: React.FC = () => {
                 ...transitionVariants,
               }}>
               <div className="relative -mr-56 mt-16 overflow-hidden px-2 sm:mr-0 sm:mt-20 md:mt-24">
-                 <div className="inset-shadow-2xs ring-zinc-800 bg-zinc-950 relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-zinc-800 shadow-lg shadow-zinc-950/15 ring-1 h-[600px] p-3">
+                 <div className="inset-shadow-2xs ring-slate-300 bg-white relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-slate-300 shadow-lg shadow-slate-200/15 ring-1 h-[600px] p-3">
                    {/* Video Player Demo */}
                    <VideoPlayer src={earlyDemoVideo} />
                  </div>

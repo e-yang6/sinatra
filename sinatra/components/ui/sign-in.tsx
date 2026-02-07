@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
+import { Typewriter } from './typewriter';
 
 // --- HELPER COMPONENTS (ICONS) ---
 
@@ -28,7 +29,7 @@ interface SignInPageProps {
 // --- SUB-COMPONENTS ---
 
 const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded-2xl border border-zinc-800 bg-zinc-900/50 backdrop-blur-sm transition-colors focus-within:border-[#c9a961]/70 focus-within:bg-[#c9a961]/10">
+  <div className="rounded-2xl border border-slate-300 bg-slate-50/50 backdrop-blur-sm transition-colors focus-within:border-[#3b82f6]/70 focus-within:bg-[#3b82f6]/10">
     {children}
   </div>
 );
@@ -36,7 +37,7 @@ const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
 // --- MAIN COMPONENT ---
 
 export const SignInPage: React.FC<SignInPageProps> = ({
-  title = <span className="font-light text-zinc-100 tracking-tighter">Welcome</span>,
+  title = <span className="font-light text-slate-900 tracking-tighter">Welcome</span>,
   description = "Access your account and continue your journey with us",
   heroImageSrc,
   onSignIn,
@@ -48,29 +49,29 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <div className="h-[100dvh] flex flex-col md:flex-row font-sans w-[100dvw] bg-zinc-950 text-zinc-200">
+    <div className="h-[100dvh] flex flex-col md:flex-row font-sans w-[100dvw] bg-white text-slate-900">
       {/* Left column: sign-in form */}
       <section className="flex-[0.4] flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="flex flex-col gap-6">
             <h1 className="text-4xl md:text-5xl font-semibold leading-tight">{title}</h1>
-            <p className="text-zinc-400">{description}</p>
+            <p className="text-slate-600">{description}</p>
 
             <form className="space-y-5" onSubmit={onSignIn}>
               <div>
-                <label className="text-sm font-medium text-zinc-400 mb-2 block">Email Address</label>
+                <label className="text-sm font-medium text-slate-700 mb-2 block">Email Address</label>
                 <GlassInputWrapper>
-                  <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-zinc-200 placeholder-zinc-600" />
+                  <input name="email" type="email" placeholder="Enter your email address" className="w-full bg-transparent text-sm p-4 rounded-2xl focus:outline-none text-slate-900 placeholder-slate-400" />
                 </GlassInputWrapper>
               </div>
 
               <div>
-                <label className="text-sm font-medium text-zinc-400 mb-2 block">Password</label>
+                <label className="text-sm font-medium text-slate-700 mb-2 block">Password</label>
                 <GlassInputWrapper>
                   <div className="relative">
-                    <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none text-zinc-200 placeholder-zinc-600" />
+                    <input name="password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" className="w-full bg-transparent text-sm p-4 pr-12 rounded-2xl focus:outline-none text-slate-900 placeholder-slate-400" />
                     <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute inset-y-0 right-3 flex items-center">
-                      {showPassword ? <EyeOff className="w-5 h-5 text-zinc-500 hover:text-zinc-300 transition-colors" /> : <Eye className="w-5 h-5 text-zinc-500 hover:text-zinc-300 transition-colors" />}
+                      {showPassword ? <EyeOff className="w-5 h-5 text-slate-500 hover:text-slate-700 transition-colors" /> : <Eye className="w-5 h-5 text-slate-500 hover:text-slate-700 transition-colors" />}
                     </button>
                   </div>
                 </GlassInputWrapper>
@@ -79,31 +80,31 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               {!isSignUp && (
                 <div className="flex items-center justify-between text-sm">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" name="rememberMe" className="w-4 h-4 rounded border-zinc-700 bg-zinc-900 text-[#c9a961] focus:ring-[#c9a961] focus:ring-offset-zinc-950" />
-                    <span className="text-zinc-300">Keep me signed in</span>
+                    <input type="checkbox" name="rememberMe" className="w-4 h-4 rounded border-slate-300 bg-white text-[#3b82f6] focus:ring-[#3b82f6] focus:ring-offset-white" />
+                    <span className="text-slate-700">Keep me signed in</span>
                   </label>
-                  <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-[#c9a961] transition-colors">Reset password</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-[#3b82f6] transition-colors">Reset password</a>
                 </div>
               )}
 
-              <button type="submit" className="w-full rounded-2xl bg-[#c9a961] py-4 font-medium text-zinc-950 hover:bg-[#b89a51] transition-colors">
+              <button type="submit" className="w-full rounded-2xl bg-[#3b82f6] py-4 font-medium text-white hover:bg-[#2563eb] transition-colors">
                 {isSignUp ? 'Sign Up' : 'Sign In'}
               </button>
             </form>
 
             <div className="relative flex items-center justify-center">
-              <span className="w-full border-t border-zinc-800"></span>
-              <span className="px-4 text-sm text-zinc-500 bg-zinc-950 absolute">Or continue with</span>
+              <span className="w-full border-t border-slate-300"></span>
+              <span className="px-4 text-sm text-slate-500 bg-white absolute">Or continue with</span>
             </div>
 
-            <button onClick={onGoogleSignIn} className="w-full flex items-center justify-center gap-3 border border-zinc-800 rounded-2xl py-4 hover:bg-zinc-900 transition-colors text-zinc-200">
+            <button onClick={onGoogleSignIn} className="w-full flex items-center justify-center gap-3 border border-slate-300 rounded-2xl py-4 hover:bg-slate-50 transition-colors text-slate-900">
               <GoogleIcon />
               Continue with Google
             </button>
 
-            <p className="text-center text-sm text-zinc-500">
+            <p className="text-center text-sm text-slate-600">
               {isSignUp ? 'Already have an account? ' : 'New to our platform? '}
-              <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-[#c9a961] hover:underline transition-colors">
+              <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-[#3b82f6] hover:underline transition-colors">
                 {isSignUp ? 'Sign In' : 'Create Account'}
               </a>
             </p>
@@ -111,17 +112,34 @@ export const SignInPage: React.FC<SignInPageProps> = ({
         </div>
       </section>
 
-      {/* Right column: background only */}
+      {/* Right column: fill-in-the-blank typewriter */}
       {heroImageSrc && (
-        <section className="hidden md:block flex-[0.6] relative p-4 overflow-hidden">
+        <section className="hidden md:flex flex-[0.6] relative p-4 overflow-hidden items-center justify-center">
           <div className="absolute inset-4 rounded-3xl overflow-hidden">
-            {/* Background image layer */}
             <div 
               className="absolute inset-0 bg-cover bg-bottom bg-no-repeat opacity-50 scale-[1.6]"
               style={{ backgroundImage: `url(${heroImageSrc})` }}
             />
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 via-zinc-950/60 to-zinc-950/80" />
+            <div className="absolute inset-0 bg-gradient-to-b from-white/80 via-white/60 to-white/80" />
+          </div>
+
+          <div className="relative z-10 w-full px-8 lg:px-12 flex items-center justify-center">
+            <h2 className="text-2xl lg:text-3xl xl:text-4xl font-light text-slate-900 tracking-tighter leading-tight text-center">
+              <Typewriter
+                prefix="Your voice, on "
+                words={['any instrument.', 'piano.', 'strings.', 'guitar.', 'saxophone.']}
+                speed={60}
+                deleteSpeed={35}
+                waitTime={2200}
+                initialDelay={600}
+                loop={true}
+                showCursor={true}
+                cursorChar="|"
+                wordClassName="text-[#3b82f6]"
+                cursorClassName="ml-0.5 text-[#3b82f6] font-light"
+                className="inline"
+              />
+            </h2>
           </div>
         </section>
       )}

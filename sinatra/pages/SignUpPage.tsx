@@ -42,19 +42,19 @@ export const SignUpPageRoute: React.FC = () => {
   };
 
   return (
-    <div className="bg-zinc-950 text-zinc-200">
+    <div className="bg-white text-slate-900">
       {error && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-900/20 border border-red-800 rounded-lg text-red-400 text-sm">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-50 border border-red-300 rounded-lg text-red-700 text-sm">
           {error}
         </div>
       )}
       {message && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-300 text-sm">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-slate-100 border border-slate-300 rounded-lg text-slate-700 text-sm">
           {message}
         </div>
       )}
       <SignInPage
-        title={<span className="font-light text-zinc-100 tracking-tighter">Create Account</span>}
+        title={<span className="font-light text-slate-900 tracking-tighter">Create Account</span>}
         description="Join us and start creating amazing music"
         heroImageSrc="https://res.cloudinary.com/drhx7imeb/image/upload/v1756215257/gradient-optimized_nfrakk.svg"
         onSignIn={handleSignUp}

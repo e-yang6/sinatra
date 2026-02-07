@@ -38,9 +38,9 @@ export const SignInPageRoute: React.FC = () => {
   };
 
   return (
-    <div className="bg-zinc-950 text-zinc-200">
+    <div className="bg-white text-slate-900">
       {error && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-900/20 border border-red-800 rounded-lg text-red-400 text-sm">
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-red-50 border border-red-300 rounded-lg text-red-700 text-sm">
           {error}
         </div>
       )}
