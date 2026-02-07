@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Component Tests</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-zinc-950 text-zinc-200 p-8">
+  <h1 class="text-2xl mb-4">Component Tests</h1>
+  
+  <div class="space-y-8">
+    <section>
+      <h2 class="text-lg mb-2">Header Component</h2>
+      <div class="h-12 border-b border-zinc-800 flex items-center justify-between px-4">
+        <div class="flex items-center gap-3">
+          <button class="w-8 h-8 flex items-center justify-center text-zinc-300 hover:text-white transition-colors">
+            ▶
+          </button>
+          <button class="w-8 h-8 flex items-center justify-center text-zinc-300 hover:text-white transition-colors">
+            ■
+          </button>
+          <button class="w-8 h-8 flex items-center justify-center text-zinc-300 hover:text-white transition-colors">
+            🎤
+          </button>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-zinc-500">BPM</label>
+            <input
+              type="number"
+              value="124"
+              class="w-16 px-2 py-1 bg-transparent border border-zinc-700 rounded text-sm text-zinc-200 focus:outline-none focus:border-zinc-600"
+            />
+          </div>
+          <button class="text-xs px-2 py-1 rounded bg-zinc-700 text-zinc-200">
+            Metronome
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg mb-2">SidebarLeft Component</h2>
+      <aside class="w-56 border-r border-zinc-800 bg-zinc-950 flex flex-col p-3 gap-3">
+        <div class="border border-dashed border-zinc-700 hover:border-zinc-600 p-4 text-center cursor-pointer flex flex-col items-center justify-center gap-2 h-24">
+          <div>📤</div>
+          <div>
+            <h3 class="text-xs text-zinc-400">Drop Drum Loop</h3>
+            <p class="text-[10px] text-zinc-600 mt-0.5">or click to upload</p>
+          </div>
+        </div>
+        <button class="h-8 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2">
+          + Add Track
+        </button>
+        <div class="p-2">
+          <label class="text-[10px] text-zinc-600">Selected Track</label>
+          <p class="text-xs text-zinc-300 mt-1">Track 1</p>
+        </div>
+        <div class="flex flex-col gap-2">
+          <label class="text-[10px] text-zinc-600">Instrument</label>
+          <select class="w-full bg-transparent border border-zinc-800 rounded px-2 py-1.5 text-xs text-zinc-300">
+            <option>Piano</option>
+            <option>Strings</option>
+          </select>
+        </div>
+        <div class="flex flex-col gap-2">
+          <button class="h-12 flex flex-col items-center justify-center gap-1 text-zinc-400 hover:text-zinc-200">
+            <div>🎤</div>
+            <span class="text-xs">Record</span>
+          </button>
+        </div>
+      </aside>
+    </section>
+
+    <section>
+      <h2 class="text-lg mb-2">Track Component</h2>
+      <div class="flex h-24 border border-zinc-800">
+        <div class="w-32 border-r border-zinc-800 p-2 flex flex-col justify-between bg-zinc-900">
+          <div>
+            <h3 class="text-xs text-zinc-300 truncate">Track 1</h3>
+            <span class="text-[9px] text-zinc-500">Piano</span>
+          </div>
+          <div class="flex flex-col gap-1">
+            <div class="flex items-center justify-between">
+              <button class="text-zinc-500">🔊</button>
+              <span class="text-[10px] font-mono text-zinc-500">100</span>
+            </div>
+            <input type="range" min="0" max="1" step="0.01" value="1" class="w-full h-0.5 bg-zinc-800" />
+          </div>
+        </div>
+        <div class="flex-1 bg-zinc-950 border-r border-zinc-800"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2 class="text-lg mb-2">Timeline Component</h2>
+      <div class="bg-zinc-950 border border-zinc-800">
+        <div class="h-6 border-b border-zinc-800 flex items-end px-2">
+          <span class="text-[10px] text-zinc-500 font-mono">0:00</span>
+        </div>
+        <div class="p-2">
+          <div class="h-24 border border-zinc-800 flex">
+            <div class="w-32 border-r border-zinc-800 p-2 bg-zinc-900">
+              <h3 class="text-xs text-zinc-300">Track 1</h3>
+            </div>
+            <div class="flex-1 bg-zinc-950"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    console.log('Component test page loaded');
+    console.log('All components should render without errors');
+  </script>
+</body>
+</html>

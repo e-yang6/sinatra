@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
+import { Terminal } from './components/Terminal';
 import { InstrumentType, TrackData, Note } from './types';
 import { uploadDrum, uploadVocal, renderMidi } from './api';
 
@@ -71,6 +72,14 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [error, setError] = useState<string | null>(null);
+  
+  // ---- Audio visualization state ----
+  const [audioLevels, setAudioLevels] = useState<number[]>([]);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  
+  // ---- Terminal state ----
+  const [terminalHeight, setTerminalHeight] = useState(96);
 
   // ---- Audio for playback ----
   const trackAudioMapRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -272,6 +281,12 @@ const App: React.FC = () => {
 
       const source = ctx.createMediaStreamSource(stream);
 
+      // Create analyser for real-time audio visualization
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      analyserRef.current = analyser;
+
       const highpass = ctx.createBiquadFilter();
       highpass.type = 'highpass';
       highpass.frequency.value = 60;
@@ -298,10 +313,57 @@ const App: React.FC = () => {
         recordedChunksRef.current.push(gated);
       };
 
-      source.connect(highpass);
+      // Connect audio nodes: source -> analyser -> filters -> processor -> destination
+      source.connect(analyser);
+      analyser.connect(highpass);
       highpass.connect(lowpass);
       lowpass.connect(processor);
       processor.connect(ctx.destination);
+
+      // Start audio level visualization with better frequency analysis
+      const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+      const waveformData = new Uint8Array(analyser.fftSize);
+      const isRecordingRef = { current: true };
+      
+      const updateLevels = () => {
+        if (!analyserRef.current || !isRecordingRef.current) {
+          animationFrameRef.current = null;
+          return;
+        }
+        
+        // Get frequency data
+        analyserRef.current.getByteFrequencyData(frequencyData);
+        // Get waveform data for more accurate visualization
+        analyserRef.current.getByteTimeDomainData(waveformData);
+        
+        // Use logarithmic scaling for better frequency representation
+        // Map frequencies more accurately (lower frequencies get more bars)
+        const numBars = 60;
+        const levels: number[] = [];
+        
+        for (let i = 0; i < numBars; i++) {
+          // Logarithmic mapping for better frequency distribution
+          const logIndex = Math.pow(i / numBars, 1.5) * frequencyData.length;
+          const index = Math.floor(logIndex);
+          const nextIndex = Math.min(index + 1, frequencyData.length - 1);
+          
+          // Interpolate between adjacent bins for smoother visualization
+          const value = frequencyData[index];
+          const nextValue = frequencyData[nextIndex];
+          const interpolated = value + (nextValue - value) * (logIndex - index);
+          
+          // Normalize and apply smoothing
+          const normalized = Math.min(1, interpolated / 255);
+          levels.push(normalized);
+        }
+        
+        setAudioLevels(levels);
+        animationFrameRef.current = requestAnimationFrame(updateLevels);
+      };
+      updateLevels();
+      
+      // Store ref for cleanup
+      (recordingTargetRef.current as any).isRecordingRef = isRecordingRef;
 
       // Recording always starts from 0
       setPlayheadSec(0);
@@ -344,6 +406,17 @@ const App: React.FC = () => {
     stopTransport();
     stopDrumPlayback();
     stopMetronome();
+
+    // Stop audio visualization
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if ((recordingTargetRef.current as any)?.isRecordingRef) {
+      (recordingTargetRef.current as any).isRecordingRef.current = false;
+    }
+    analyserRef.current = null;
+    setAudioLevels([]);
 
     // Stop all other tracks
     trackAudioMapRef.current.forEach(el => {
@@ -725,7 +798,7 @@ const App: React.FC = () => {
   //  RENDER
   // ==============================
   return (
-    <div className="h-screen w-screen flex flex-col bg-dark-bg text-white overflow-hidden font-sans selection:bg-accent selection:text-white">
+    <div className="h-screen w-screen flex flex-col bg-zinc-950 text-zinc-200 overflow-hidden">
       <Header
         isPlaying={isPlaying}
         isRecording={isRecording}
@@ -764,19 +837,12 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* Status Bar */}
-      <div className="h-6 bg-dark-bg border-t border-dark-border px-4 flex items-center justify-between text-[10px]">
-        <div className="text-zinc-600">Sinatra v0.1.0</div>
-        <div className={
-          error ? 'text-red-400' :
-          isRecording ? 'text-red-400 animate-pulse' :
-          isProcessing ? 'text-yellow-400 animate-pulse' :
-          statusMessage !== 'Ready' ? 'text-green-400' :
-          'text-zinc-600'
-        }>
-          {error || statusMessage}
-        </div>
-      </div>
+      <Terminal 
+        isRecording={isRecording} 
+        audioLevels={audioLevels}
+        height={terminalHeight}
+        onHeightChange={setTerminalHeight}
+      />
     </div>
   );
 };
