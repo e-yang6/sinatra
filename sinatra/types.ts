@@ -37,15 +37,24 @@ export enum InstrumentType {
   
   // Raw audio (no MIDI conversion)
   RAW_AUDIO = 'Raw Audio',
+
+  // Custom one-shot sample (pitch-shifted to play MIDI notes)
+  CUSTOM_SAMPLE = 'Custom Sample',
 }
 
-export enum KeyScale {
-  C_MAJOR = 'C Major',
-  A_MINOR = 'A Minor',
-  G_MAJOR = 'G Major',
-  E_MINOR = 'E Minor',
-  CHROMATIC = 'Chromatic'
-}
+// Musical keys (root notes)
+export const MUSICAL_KEYS = [
+  'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',
+] as const;
+export type MusicalKey = typeof MUSICAL_KEYS[number];
+
+// Scale types
+export const SCALE_TYPES = ['chromatic', 'major', 'minor'] as const;
+export type ScaleType = typeof SCALE_TYPES[number];
+
+// Quantize grid options
+export const QUANTIZE_OPTIONS = ['off', '1/4', '1/8', '1/16', '1/32'] as const;
+export type QuantizeOption = typeof QUANTIZE_OPTIONS[number];
 
 export interface Clip {
   id: string;
