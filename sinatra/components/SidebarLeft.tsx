@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { Upload, Mic, Music } from 'lucide-react';
+import { Upload, Mic, Music, Plus } from 'lucide-react';
 import { InstrumentType } from '../types';
 
 interface SidebarLeftProps {
@@ -9,6 +9,9 @@ interface SidebarLeftProps {
   onRecordStart: () => void;
   onDrumUpload?: (file: File) => void;
   onVocalUpload?: (file: File) => void;
+  onAddTrack: () => void;
+  selectedTrackName: string;
+  isDrumSelected: boolean;
 }
 
 export const SidebarLeft: React.FC<SidebarLeftProps> = ({
@@ -17,10 +20,11 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   isRecording,
   onRecordStart,
   onDrumUpload,
-  onVocalUpload,
+  onAddTrack,
+  selectedTrackName,
+  isDrumSelected,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const vocalInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -41,29 +45,23 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
     }
   };
 
-  const handleVocalFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file && file.type.startsWith('audio/')) {
-      onVocalUpload?.(file);
-    }
-  };
 
   return (
-    <aside className="w-64 border-r border-dark-border bg-dark-bg flex flex-col p-4 gap-6 z-40">
+    <aside className="w-64 border-r border-dark-border bg-dark-bg flex flex-col p-4 gap-5 z-40 overflow-y-auto">
       
       {/* 1. Upload Drum Loop */}
       <div 
-        className="group relative rounded-xl border-2 border-dashed border-zinc-800 hover:border-accent/50 hover:bg-accent/5 transition-all p-6 text-center cursor-pointer flex flex-col items-center justify-center gap-3 h-40"
+        className="group relative rounded-xl border-2 border-dashed border-zinc-800 hover:border-accent/50 hover:bg-accent/5 transition-all p-5 text-center cursor-pointer flex flex-col items-center justify-center gap-2 h-32 shrink-0"
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
-        <div className="w-10 h-10 rounded-full bg-zinc-900 flex items-center justify-center group-hover:scale-110 transition-transform">
-          <Upload size={18} className="text-zinc-400 group-hover:text-accent transition-colors" />
+        <div className="w-9 h-9 rounded-full bg-zinc-900 flex items-center justify-center group-hover:scale-110 transition-transform">
+          <Upload size={16} className="text-zinc-400 group-hover:text-accent transition-colors" />
         </div>
         <div>
           <h3 className="text-sm font-medium text-zinc-300 group-hover:text-white">Drop Drum Loop</h3>
-          <p className="text-xs text-zinc-500 mt-1">or click to upload</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5">or click to upload</p>
         </div>
         <input 
           type="file" 
@@ -74,14 +72,53 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         />
       </div>
 
-      {/* 2. Record Melody */}
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Input</label>
-        <div className="flex flex-col gap-2">
+      {/* 2. Add Track */}
+      <button
+        onClick={onAddTrack}
+        className="h-10 rounded-lg bg-accent/10 border border-accent/20 hover:bg-accent/20 hover:border-accent/40 text-accent text-sm font-medium transition-all flex items-center justify-center gap-2 shrink-0"
+      >
+        <Plus size={16} />
+        Add Track
+      </button>
+
+      {/* 3. Selected Track Info */}
+      <div className="rounded-lg bg-dark-surface border border-dark-border p-3 shrink-0">
+        <label className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider">Selected Track</label>
+        <p className="text-sm text-zinc-200 mt-1 truncate">{selectedTrackName}</p>
+        {isDrumSelected && (
+          <p className="text-[10px] text-yellow-500 mt-1">Select a vocal track to record</p>
+        )}
+      </div>
+
+      {/* 4. Instrument Picker (for selected track) */}
+      {!isDrumSelected && (
+        <div className="flex flex-col gap-2 shrink-0">
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Instrument</label>
+          <div className="relative">
+            <select 
+              value={selectedInstrument}
+              onChange={(e) => onInstrumentChange(e.target.value as InstrumentType)}
+              className="w-full appearance-none bg-dark-surface border border-dark-border rounded-lg py-3 px-4 text-sm text-zinc-200 focus:outline-none focus:border-accent hover:border-zinc-600 transition-colors cursor-pointer"
+            >
+              {Object.values(InstrumentType).map((inst) => (
+                <option key={inst} value={inst}>{inst}</option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
+              <Music size={16} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Record */}
+      {!isDrumSelected && (
+        <div className="flex flex-col gap-2 shrink-0">
+          <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Input</label>
           <button 
             onClick={onRecordStart}
             disabled={isRecording}
-            className={`relative h-20 rounded-xl flex flex-col items-center justify-center gap-2 transition-all overflow-hidden ${
+            className={`relative h-16 rounded-xl flex flex-col items-center justify-center gap-1.5 transition-all overflow-hidden ${
               isRecording 
                 ? 'bg-red-500/10 border border-red-500/30' 
                 : 'bg-dark-surface border border-dark-border hover:border-zinc-600 hover:bg-zinc-800'
@@ -90,48 +127,16 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
             {isRecording && (
                <div className="absolute inset-0 bg-red-500/5 animate-pulse" />
             )}
-            <Mic size={28} className={isRecording ? 'text-red-500 animate-bounce' : 'text-zinc-200'} />
-            <span className={`text-sm font-medium ${isRecording ? 'text-red-400' : 'text-zinc-400'}`}>
-              {isRecording ? 'Listening...' : 'Record Melody'}
+            <Mic size={24} className={isRecording ? 'text-red-500 animate-bounce' : 'text-zinc-200'} />
+            <span className={`text-xs font-medium ${isRecording ? 'text-red-400' : 'text-zinc-400'}`}>
+              {isRecording ? 'Recording...' : 'Record Melody'}
             </span>
           </button>
-          <button
-            onClick={() => vocalInputRef.current?.click()}
-            className="h-10 rounded-lg bg-dark-surface border border-dark-border hover:border-zinc-600 hover:bg-zinc-800 text-xs text-zinc-400 transition-colors"
-          >
-            Or Upload WAV File
-          </button>
-          <input 
-            type="file" 
-            ref={vocalInputRef} 
-            className="hidden" 
-            accept="audio/*,.wav" 
-            onChange={handleVocalFileChange}
-          />
+          <p className="text-[10px] text-zinc-600 px-1 text-center">
+            Records onto the selected track
+          </p>
         </div>
-        <p className="text-[10px] text-zinc-600 px-1 text-center">
-          Sing or hum your melody — full performance captured
-        </p>
-      </div>
-
-      {/* 3. Instrument Picker */}
-      <div className="flex flex-col gap-2">
-        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Instrument</label>
-        <div className="relative">
-          <select 
-            value={selectedInstrument}
-            onChange={(e) => onInstrumentChange(e.target.value as InstrumentType)}
-            className="w-full appearance-none bg-dark-surface border border-dark-border rounded-lg py-3 px-4 text-sm text-zinc-200 focus:outline-none focus:border-accent hover:border-zinc-600 transition-colors cursor-pointer"
-          >
-            {Object.values(InstrumentType).map((inst) => (
-              <option key={inst} value={inst}>{inst}</option>
-            ))}
-          </select>
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">
-            <Music size={16} />
-          </div>
-        </div>
-      </div>
+      )}
       
     </aside>
   );

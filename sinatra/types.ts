@@ -28,4 +28,7 @@ export interface TrackData {
   isMuted: boolean;
   isSolo: boolean;
   audioUrl?: string; // URL to the audio file for display
+  instrument?: InstrumentType; // Instrument assigned to this track
+  audioDuration?: number; // Duration in seconds for waveform sync
+  color?: string; // Hex color for track customization
 }
