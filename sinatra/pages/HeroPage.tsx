@@ -246,7 +246,7 @@ export const HeroPage: React.FC = () => {
                     },
                     ...transitionVariants,
                   }}>
-                  <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] font-light text-zinc-100">
+                  <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] font-light text-zinc-100 tracking-tighter">
                     Modern Solutions for Music Production
                   </h1>
                   <p className="mx-auto mt-8 max-w-2xl text-balance text-lg text-zinc-400">
