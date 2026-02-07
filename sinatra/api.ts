@@ -151,10 +151,13 @@ export async function processAll(
 // ==================== CHAT API ====================
 
 export interface ChatAction {
-  type: 'ADD_TRACK' | 'SET_BPM' | 'CHANGE_INSTRUMENT' | 'TRANSPORT';
+  type: 'ADD_TRACK' | 'SET_BPM' | 'CHANGE_INSTRUMENT' | 'TRANSPORT' | 'SET_KEY' | 'SET_SCALE' | 'SET_QUANTIZE';
   instrument?: string;
   value?: number;
   command?: string;
+  key?: string;
+  scale?: string;
+  quantize?: string;
 }
 
 export interface ChatResponse {
@@ -168,6 +171,9 @@ export interface ProjectContext {
   isPlaying: boolean;
   isRecording: boolean;
   selectedInstrument: string;
+  key?: string;
+  scale?: string;
+  quantize?: string;
   tracks: Array<{
     id: string;
     name: string;
@@ -177,7 +183,7 @@ export interface ProjectContext {
 }
 
 /**
- * Send a text message to the AI chatbot
+ * Send a text message to Frank (AI chatbot)
  */
 export async function sendChatMessage(
   message: string,
@@ -198,7 +204,7 @@ export async function sendChatMessage(
 }
 
 /**
- * Send a voice recording to the AI chatbot (speech-to-text + chat)
+ * Send a voice recording to Frank (AI chatbot) (speech-to-text + chat)
  */
 export async function sendVoiceMessage(
   audioBlob: Blob,

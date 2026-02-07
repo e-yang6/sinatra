@@ -4,7 +4,7 @@ import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
 import { Chatbot } from './components/Chatbot';
-import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption } from './types';
+import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
 import { uploadDrum, uploadVocal, renderMidi, uploadSample, ChatAction, ProjectContext } from './api';
 
 // ---- WAV encoding utility ----
@@ -113,6 +113,10 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
 
   // ---- Chatbot state ----
   const [chatbotWidth, setChatbotWidth] = useState(400);
+
+  // ---- Undo/Redo state ----
+  const [history, setHistory] = useState<TrackData[][]>([INITIAL_TRACKS]);
+  const [historyIndex, setHistoryIndex] = useState(0);
 
   // Apply master volume to all clip audio elements and drum
   useEffect(() => {
@@ -858,12 +862,93 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     }));
   }, []);
 
-  // Keyboard listener for backspace/delete to delete selected clip
+  // ==============================
+  //  UNDO/REDO
+  // ==============================
+  const saveToHistory = useCallback((newTracks: TrackData[]) => {
+    setHistory(prev => {
+      const newHistory = prev.slice(0, historyIndex + 1);
+      newHistory.push(JSON.parse(JSON.stringify(newTracks))); // Deep clone
+      // Limit history to 50 states
+      if (newHistory.length > 50) {
+        newHistory.shift();
+        return newHistory;
+      }
+      return newHistory;
+    });
+    setHistoryIndex(prev => Math.min(prev + 1, 49));
+  }, [historyIndex]);
+
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      isUndoRedoRef.current = true;
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      const restoredTracks = JSON.parse(JSON.stringify(history[newIndex])); // Deep clone
+      prevTracksRef.current = restoredTracks;
+      setTracks(restoredTracks);
+    }
+  }, [historyIndex, history]);
+
+  const handleRedo = useCallback(() => {
+    if (historyIndex < history.length - 1) {
+      isUndoRedoRef.current = true;
+      const newIndex = historyIndex + 1;
+      setHistoryIndex(newIndex);
+      const restoredTracks = JSON.parse(JSON.stringify(history[newIndex])); // Deep clone
+      prevTracksRef.current = restoredTracks;
+      setTracks(restoredTracks);
+    }
+  }, [historyIndex, history]);
+
+  // Save to history when tracks change (but not from undo/redo)
+  const isUndoRedoRef = useRef(false);
+  const prevTracksRef = useRef<TrackData[]>(tracks);
+  useEffect(() => {
+    // Only save if tracks actually changed and it's not from undo/redo
+    if (!isUndoRedoRef.current && JSON.stringify(prevTracksRef.current) !== JSON.stringify(tracks)) {
+      saveToHistory(tracks);
+      prevTracksRef.current = tracks;
+    }
+    isUndoRedoRef.current = false;
+  }, [tracks, saveToHistory]);
+
+  // Keyboard listener for backspace/delete to delete selected clip, undo/redo, and spacebar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
+      
+      // Ctrl+Z: Undo
+      if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        if (!isInput) {
+          isUndoRedoRef.current = true;
+          handleUndo();
+        }
+        return;
+      }
+      
+      // Ctrl+Y or Ctrl+Shift+Z: Redo
+      if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
+        e.preventDefault();
+        if (!isInput) {
+          isUndoRedoRef.current = true;
+          handleRedo();
+        }
+        return;
+      }
+      
+      // Spacebar: Play/Pause
+      if (e.key === ' ' && !isInput) {
+        e.preventDefault();
+        handlePlayToggle();
+        return;
+      }
+      
+      // Backspace/Delete: Delete selected clip
       if (e.key === 'Backspace' || e.key === 'Delete') {
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+        if (isInput) return;
         if (selectedClipId) {
           e.preventDefault();
           handleDeleteClip();
@@ -872,7 +957,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedClipId, handleDeleteClip]);
+  }, [selectedClipId, handleDeleteClip, handleUndo, handleRedo, handlePlayToggle]);
 
   // ==============================
   //  TRACK DELETE & UPDATE
@@ -1081,8 +1166,26 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         }
         break;
       }
+      case 'SET_KEY': {
+        if (action.key && MUSICAL_KEYS.includes(action.key as MusicalKey)) {
+          setMusicalKey(action.key as MusicalKey);
+        }
+        break;
+      }
+      case 'SET_SCALE': {
+        if (action.scale && SCALE_TYPES.includes(action.scale as ScaleType)) {
+          setScaleType(action.scale as ScaleType);
+        }
+        break;
+      }
+      case 'SET_QUANTIZE': {
+        if (action.quantize && QUANTIZE_OPTIONS.includes(action.quantize as QuantizeOption)) {
+          setQuantize(action.quantize as QuantizeOption);
+        }
+        break;
+      }
     }
-  }, [addTrack, handleInstrumentChange, handlePlayToggle, handleStop, handleRecordToggle, isPlaying, isRecording]);
+  }, [addTrack, handleInstrumentChange, handlePlayToggle, handleStop, handleRecordToggle, isPlaying, isRecording, setMusicalKey, setScaleType, setQuantize]);
 
   // Calculate project stats
   const totalDuration = Math.max(
@@ -1172,6 +1275,9 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           isPlaying,
           isRecording,
           selectedInstrument,
+          key: musicalKey,
+          scale: scaleType,
+          quantize,
           tracks: tracks.map(t => ({
             id: t.id,
             name: t.name,

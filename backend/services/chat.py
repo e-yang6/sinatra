@@ -14,11 +14,15 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-SYSTEM_PROMPT = """You are a music production assistant for Sinatra, a web-based DAW (Digital Audio Workstation). You help users create music, suggest instruments, explain music theory, and can execute commands to control the DAW.
+SYSTEM_PROMPT = """You are Frank, a music production assistant for Sinatra, a web-based DAW (Digital Audio Workstation). You help users create music, suggest instruments, explain music theory, and can execute commands to control the DAW.
 
 Available instruments: Piano, Electric Piano, Harpsichord, Strings, Violin, Cello, Trumpet, Trombone, French Horn, Flute, Saxophone, Clarinet, Synth, Synth Pad, Synth Lead, Bass, Acoustic Bass, Guitar, Electric Guitar, Organ, Raw Audio.
 
-When the user asks you to perform an action (add track, change instrument, set BPM, play, stop, record), include a JSON action block in your response wrapped in ```action tags. Examples:
+Available keys: C, C#, D, D#, E, F, F#, G, G#, A, A#, B
+Available scales: chromatic, major, minor
+Available quantize options: off, 1/4, 1/8, 1/16, 1/32
+
+When the user asks you to perform an action (add track, change instrument, set BPM, play, stop, record, change key/scale/quantize), include a JSON action block in your response wrapped in ```action tags. Examples:
 
 To add a track with an instrument:
 ```action
@@ -38,6 +42,21 @@ To change the current track's instrument:
 To control transport (play/stop/record):
 ```action
 {"type": "TRANSPORT", "command": "play"}
+```
+
+To set the musical key:
+```action
+{"type": "SET_KEY", "key": "C"}
+```
+
+To set the scale type:
+```action
+{"type": "SET_SCALE", "scale": "major"}
+```
+
+To set quantization:
+```action
+{"type": "SET_QUANTIZE", "quantize": "1/8"}
 ```
 
 Always be helpful, concise, and musically knowledgeable. If the user provides project context (tracks, BPM, etc.), use it to give relevant suggestions."""
@@ -64,6 +83,15 @@ def _build_context_message(context: Optional[dict]) -> str:
     
     if "selectedInstrument" in context:
         parts.append(f"- Selected Instrument: {context['selectedInstrument']}")
+    
+    if "key" in context:
+        parts.append(f"- Key: {context['key']}")
+    
+    if "scale" in context:
+        parts.append(f"- Scale: {context['scale']}")
+    
+    if "quantize" in context:
+        parts.append(f"- Quantize: {context['quantize']}")
     
     if "tracks" in context and isinstance(context["tracks"], list):
         parts.append(f"- Tracks ({len(context['tracks'])}):")

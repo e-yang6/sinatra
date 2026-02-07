@@ -353,7 +353,7 @@ class ChatRequest(BaseModel):
 @app.post("/chat")
 async def chat_endpoint(request: ChatRequest):
     """
-    Send a text message to the AI assistant.
+    Send a text message to Frank (AI assistant).
     Includes project context for relevant suggestions.
     Returns the AI response and any detected actions.
     """
@@ -370,7 +370,7 @@ async def chat_voice_endpoint(
     context: str = Form(default="{}"),
 ):
     """
-    Send a voice recording to the AI assistant.
+    Send a voice recording to Frank (AI assistant).
     Transcribes the audio using Gradio (Whisper), then processes through Gemini.
     Returns the transcription, AI response, and any detected actions.
     """
