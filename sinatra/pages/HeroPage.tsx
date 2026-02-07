@@ -6,8 +6,17 @@ import { Button } from '../components/ui/button';
 import { AnimatedGroup } from '../components/ui/animated-group';
 import { VideoPlayer } from '../components/VideoPlayer';
 import { cn } from '../lib/utils';
+import {
+  Carousel,
+  CarouselApi,
+  CarouselContent,
+  CarouselItem,
+} from '../components/ui/carousel';
+import AutoplayPlugin from 'embla-carousel-autoplay';
+import { Feature72 } from '../components/Feature72';
 
 const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
+const earlyDemoVideo = new URL('../assets/EarlyDemo.mp4', import.meta.url).href;
 
 const transitionVariants = {
   item: {
@@ -129,27 +138,8 @@ const HeroHeader: React.FC = () => {
               </div>
               <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
                 <Button
-                  variant="outline"
                   size="sm"
-                  className={cn(isScrolled && 'lg:hidden')}
-                  onClick={() => navigate('/signin')}>
-                  <span>Login</span>
-                </Button>
-                <Button
-                  size="sm"
-                  className={cn(
-                    "bg-[#c9a961] hover:bg-[#b89a51] text-zinc-950",
-                    isScrolled && 'lg:hidden'
-                  )}
-                  onClick={() => navigate('/signup')}>
-                  <span>Sign Up</span>
-                </Button>
-                <Button
-                  size="sm"
-                  className={cn(
-                    "bg-[#c9a961] hover:bg-[#b89a51] text-zinc-950",
-                    isScrolled ? 'lg:inline-flex' : 'hidden'
-                  )}
+                  className="bg-[#c9a961] hover:bg-[#b89a51] text-zinc-950"
                   onClick={() => {
                     if (user) {
                       navigate('/projects');
@@ -157,7 +147,7 @@ const HeroHeader: React.FC = () => {
                       navigate('/signup');
                     }
                   }}>
-                  <span>Get Started</span>
+                  <span>Start Building</span>
                 </Button>
               </div>
             </div>
@@ -165,6 +155,91 @@ const HeroHeader: React.FC = () => {
           </div>
         </nav>
       </header>
+  );
+};
+
+const ArtistsCarousel: React.FC = () => {
+  const [api, setApi] = useState<CarouselApi>();
+  // Import carousel assets
+  const carouselAssets = [
+    new URL('../assets/carousel-assets/dax1.jpg', import.meta.url).href,
+    new URL('../assets/carousel-assets/dax2.jpg', import.meta.url).href,
+    new URL('../assets/carousel-assets/dax3.png', import.meta.url).href,
+    new URL('../assets/carousel-assets/dax4.jpg', import.meta.url).href,
+    new URL('../assets/carousel-assets/dax5.jpg', import.meta.url).href,
+    new URL('../assets/carousel-assets/ethan.jpg', import.meta.url).href,
+  ];
+  // Duplicate logos many times for seamless infinite scroll (10 sets = 40 items total)
+  // More sets = more buffer for seamless reset
+  const duplicatedLogos = Array(10).fill(carouselAssets).flat();
+  const autoplayPlugin = React.useRef(
+    AutoplayPlugin({ delay: 2000, stopOnInteraction: false, stopOnMouseEnter: false })
+  );
+
+  useEffect(() => {
+    if (!api) {
+      return;
+    }
+
+    // Start at a middle position for seamless looping
+    const startIndex = carouselAssets.length * 5;
+    api.scrollTo(startIndex, false);
+
+    // Handle seamless reset
+    const handleSelect = () => {
+      const currentIndex = api.selectedScrollSnap();
+      const totalSlides = api.scrollSnapList().length;
+      const resetPoint = carouselAssets.length * 8; // Near the end
+      const resetTarget = carouselAssets.length * 5; // Back to middle
+      
+      if (currentIndex >= resetPoint) {
+        // Reset instantly to middle - appears seamless since content is identical
+        api.scrollTo(resetTarget, false);
+      }
+    };
+
+    api.on('select', handleSelect);
+
+    return () => {
+      api.off('select', handleSelect);
+    };
+  }, [api, carouselAssets.length]);
+
+  return (
+    <div className="w-full py-20 lg:py-40">
+      <div className="container mx-auto max-w-7xl px-6">
+        <div className="flex flex-col gap-10">
+          <h2 className="text-xl md:text-3xl lg:text-5xl tracking-tighter lg:max-w-xl font-light text-left text-zinc-100">
+            Trusted by thousands of artists worldwide.
+          </h2>
+          <Carousel 
+            setApi={setApi} 
+            className="w-full"
+            opts={{
+              align: "start",
+              loop: false,
+              dragFree: true,
+              duration: 25,
+            }}
+            plugins={[autoplayPlugin.current]}
+          >
+            <CarouselContent className="-ml-2 md:-ml-4">
+              {duplicatedLogos.map((logoSrc, index) => (
+                <CarouselItem className="pl-2 md:pl-4 basis-1/4 lg:basis-1/6" key={index}>
+                  <div className="flex rounded-xl aspect-square bg-zinc-900/30 border border-zinc-800/30 items-center justify-center p-2 hover:border-[#c9a961]/50 hover:bg-zinc-900/50 transition-all duration-300 overflow-hidden">
+                    <img 
+                      src={logoSrc} 
+                      alt={`Artist logo ${index + 1}`}
+                      className="w-full h-full object-contain rounded-lg"
+                    />
+                  </div>
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+        </div>
+      </div>
+    </div>
   );
 };
 
@@ -202,7 +277,7 @@ export const HeroPage: React.FC = () => {
           <div className="h-[80rem] -translate-y-[350px] absolute left-0 top-0 w-56 -rotate-45 bg-[radial-gradient(50%_50%_at_50%_50%,hsla(0,0%,85%,.04)_0,hsla(0,0%,45%,.02)_80%,transparent_100%)]" />
         </div>
         <section>
-          <div className="relative pt-24 md:pt-36">
+          <div className="relative pt-24 md:pt-24">
             <AnimatedGroup
               variants={{
                 container: {
@@ -247,74 +322,73 @@ export const HeroPage: React.FC = () => {
                     },
                     ...transitionVariants,
                   }}>
-                  <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] font-light text-zinc-100 tracking-tighter">
-                    Modern Solutions for Music Production
-                  </h1>
-                  <p className="mx-auto mt-8 max-w-2xl text-balance text-lg text-zinc-400">
-                    Highly customizable music production tools for building modern compositions that sound and feel the way you mean it.
-                  </p>
-                </AnimatedGroup>
+                    <h1 className="mt-12 max-w-4xl mx-auto text-balance text-4xl md:text-5xl lg:mt-16 xl:text-6xl font-light text-zinc-100 tracking-tighter">
+                      Bring your music to the moon.
+                    </h1>
 
-                <AnimatedGroup
-                  variants={{
-                    container: {
-                      visible: {
-                        transition: {
-                          staggerChildren: 0.08,
-                          delayChildren: 0.4,
-                        },
-                      },
-                    },
-                    ...transitionVariants,
-                  }}
-                  className="mt-12 flex flex-col items-center justify-center gap-2 md:flex-row">
-                  <div
-                    key={1}
-                    className="bg-zinc-800/50 rounded-[14px] border border-zinc-700 p-0.5">
-                    <Button
-                      size="lg"
-                      className="rounded-xl px-5 text-base bg-[#c9a961] hover:bg-[#b89a51] text-zinc-950"
-                      onClick={() => navigate('/signup')}>
-                      <span className="text-nowrap">Start Building</span>
-                    </Button>
-                  </div>
-                  <Button
-                    key={2}
-                    size="lg"
-                    variant="ghost"
-                    className="h-11 rounded-xl px-5 text-zinc-300 hover:text-zinc-100"
-                    onClick={() => navigate('/signin')}>
-                    <span className="text-nowrap">Sign In</span>
-                  </Button>
-                </AnimatedGroup>
+                    <p className="mt-4 max-w-2xl mx-auto text-balance text-lg text-zinc-400">
+                      Sinatra empowers anyone to make music, easily. 
+                    </p>
+                  </AnimatedGroup>
+
               </div>
             </div>
 
             <AnimatedGroup
               variants={{
-                container: {
-                  visible: {
-                    transition: {
-                      staggerChildren: 0.08,
-                      delayChildren: 0.5,
+                    container: {
+                      visible: {
+                        transition: {
+                          staggerChildren: 0.08,
+                          delayChildren: 0.8,
+                        },
+                      },
                     },
-                  },
-                },
                 ...transitionVariants,
               }}>
-              <div className="relative -mr-56 mt-8 overflow-hidden px-2 sm:mr-0 sm:mt-12 md:mt-20">
-                <div
-                  aria-hidden
-                  className="bg-gradient-to-b to-zinc-950 absolute inset-0 z-10 from-transparent from-35%"
-                />
-                <div className="inset-shadow-2xs ring-zinc-800 bg-zinc-950 relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-zinc-800 p-4 shadow-lg shadow-zinc-950/15 ring-1">
-                  {/* Video Player Demo */}
-                  <VideoPlayer src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" />
-                </div>
+              <div className="relative -mr-56 mt-16 overflow-hidden px-2 sm:mr-0 sm:mt-20 md:mt-24">
+                 <div className="inset-shadow-2xs ring-zinc-800 bg-zinc-950 relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-zinc-800 shadow-lg shadow-zinc-950/15 ring-1 h-[600px] p-3">
+                   {/* Video Player Demo */}
+                   <VideoPlayer src={earlyDemoVideo} />
+                 </div>
               </div>
             </AnimatedGroup>
           </div>
           </section>
+
+          {/* Artists Carousel Section */}
+          <ArtistsCarousel />
+
+          {/* Features Section */}
+          <Feature72
+            heading="Powerful Features"
+            description="Discover the powerful features that make Sinatra the perfect tool for music production. Built with modern technology and designed for creative workflows."
+            linkUrl="#"
+            linkText="Explore features"
+            features={[
+              {
+                id: "feature-1",
+                title: "Intuitive Editor",
+                description:
+                  "Professional editor with everything an artist needs to create music, instantly.",
+                image: "https://www.shadcnblocks.com/images/block/placeholder-1.svg",
+              },
+              {
+                id: "feature-2",
+                title: "Voice-to-Instrument Conversion",
+                description:
+                  "Convert your voice to any instrument of your choice. No need to hesitate. Just speak and create.",
+                image: "https://www.shadcnblocks.com/images/block/placeholder-2.svg",
+              },
+              {
+                id: "feature-3",
+                title: "AI-Powered Assistant",
+                description:
+                  "Use Frank to shave off repetitive tasks, and focus on creating your music instead.",
+                image: "https://www.shadcnblocks.com/images/block/placeholder-3.svg",
+              },
+            ]}
+          />
         </main>
       </>
     );

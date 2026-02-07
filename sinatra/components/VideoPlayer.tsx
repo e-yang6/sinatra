@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Play, Pause, Volume2, Volume1, VolumeX } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -59,6 +59,17 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
   const [showControls, setShowControls] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+
+  // Autoplay on mount
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.play().catch((error) => {
+        // Autoplay may be blocked by browser, handle silently
+        console.log('Autoplay prevented:', error);
+      });
+      setIsPlaying(true);
+    }
+  }, []);
 
   const togglePlay = () => {
     if (videoRef.current) {
@@ -122,8 +133,8 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
 
   return (
     <motion.div
-      className="relative w-full max-w-4xl mx-auto rounded-xl overflow-hidden bg-[#11111198] shadow-[0_0_20px_rgba(0,0,0,0.2)] backdrop-blur-sm"
-      initial={{ opacity: 0, y: 20 }}
+      className="relative w-full h-full rounded-xl overflow-hidden bg-[#11111198] shadow-[0_0_20px_rgba(0,0,0,0.2)] backdrop-blur-sm"
+      initial={{ opacity: 1, y: 0 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
       onMouseEnter={() => setShowControls(true)}
@@ -131,7 +142,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
     >
       <video
         ref={videoRef}
-        className="w-full"
+        className="w-full h-full object-contain"
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={() => {
           if (videoRef.current) {
@@ -140,6 +151,10 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({ src }) => {
         }}
         src={src}
         onClick={togglePlay}
+        autoPlay
+        muted
+        loop
+        playsInline
       />
 
       <AnimatePresence>
