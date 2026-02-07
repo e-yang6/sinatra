@@ -15,14 +15,14 @@ export interface Testimonial {
 
 export interface TestimonialStackProps {
   testimonials: Testimonial[];
-  /** How many cards to show behind the main card */
-  visibleBehind?: number;
+  /** How many cards to show on each side of the center */
+  visibleSides?: number;
   /** Auto-swipe interval in milliseconds (0 to disable) */
   autoSwipeInterval?: number;
 }
 
 // --- The Component ---
-export const TestimonialStack = ({ testimonials, visibleBehind = 2, autoSwipeInterval = 0 }: TestimonialStackProps) => {
+export const TestimonialStack = ({ testimonials, visibleSides = 1, autoSwipeInterval = 0 }: TestimonialStackProps) => {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -71,11 +71,20 @@ export const TestimonialStack = ({ testimonials, visibleBehind = 2, autoSwipeInt
   const handleDragEnd = useCallback(() => {
     if (!isDragging) return;
     cardRefs.current[activeIndex]?.classList.remove('is-dragging');
-    if (Math.abs(dragOffset) > 50) {
+    
+    // Smooth threshold with momentum consideration
+    const threshold = 80;
+    const velocity = Math.abs(dragOffset);
+    
+    if (velocity > threshold) {
       navigate(activeIndex + (dragOffset < 0 ? 1 : -1));
     }
-    setIsDragging(false);
-    setDragOffset(0);
+    
+    // Smooth reset with slight delay for better visual flow
+    setTimeout(() => {
+      setIsDragging(false);
+      setDragOffset(0);
+    }, 50);
   }, [isDragging, dragOffset, activeIndex, navigate]);
 
   useEffect(() => {
@@ -96,26 +105,28 @@ export const TestimonialStack = ({ testimonials, visibleBehind = 2, autoSwipeInt
   if (!testimonials?.length) return null;
 
   return (
-    <section className="testimonials-stack relative pb-10 w-full h-full flex items-center justify-center">
+    <section className="testimonials-carousel relative w-full h-full flex items-center justify-center overflow-hidden">
       <style>{`
-        .testimonials-stack {
+        .testimonials-carousel {
           perspective: 1000px;
         }
         .testimonial-card {
           position: absolute;
-          width: 90%;
-          max-width: 500px;
-          border-radius: 1.5rem;
+          width: 320px;
+          border-radius: 0.5rem;
           background: rgba(9, 9, 11, 0.6);
           border: 1px solid rgba(63, 63, 70, 0.5);
           backdrop-filter: blur(16px);
-          transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease;
+          transition: transform 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), scale 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
           cursor: grab;
           user-select: none;
+          will-change: transform, opacity;
+          backface-visibility: hidden;
+          -webkit-font-smoothing: antialiased;
         }
         .testimonial-card.is-dragging {
           cursor: grabbing;
-          transition: none;
+          transition: transform 0.1s ease-out, opacity 0.1s ease-out;
         }
         .pagination-dot {
           width: 8px;
@@ -124,35 +135,58 @@ export const TestimonialStack = ({ testimonials, visibleBehind = 2, autoSwipeInt
           background: rgba(161, 161, 170, 0.4);
           border: none;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
         .pagination-dot.active {
           background: #c9a961;
           width: 24px;
           border-radius: 4px;
         }
+        .pagination-dot:hover {
+          background: rgba(201, 169, 97, 0.6);
+        }
       `}</style>
       {testimonials.map((testimonial, index) => {
-        const isActive = index === activeIndex;
-        // Calculate the card's position in the display order
-        const displayOrder = (index - activeIndex + totalCards) % totalCards;
+        // Calculate the card's position relative to the active card
+        const offset = (index - activeIndex + totalCards) % totalCards;
+        const displayOffset = offset > totalCards / 2 ? offset - totalCards : offset;
 
         // --- DYNAMIC STYLE CALCULATION ---
         const style: CSSProperties = {};
-        if (displayOrder === 0) { // The active card
-          style.transform = `translateX(${dragOffset}px)`;
+        const cardWidth = 320;
+        const gap = 40;
+        const baseTranslateX = displayOffset * (cardWidth + gap);
+        const centerX = 0;
+        
+        // Smooth easing for scale and opacity based on distance
+        const distance = Math.abs(displayOffset);
+        const maxVisibleDistance = visibleSides + 1;
+        
+        if (displayOffset === 0) { // The active (center) card
+          style.transform = `translateX(${centerX + dragOffset}px) scale(1)`;
           style.opacity = 1;
-          style.zIndex = totalCards;
-        } else if (displayOrder <= visibleBehind) { // Cards stacked behind
-          const scale = 1 - 0.05 * displayOrder;
-          const translateY = -2 * displayOrder; // in rem
-          style.transform = `scale(${scale}) translateY(${translateY}rem)`;
-          style.opacity = 1 - 0.2 * displayOrder;
-          style.zIndex = totalCards - displayOrder;
+          style.zIndex = totalCards + 1;
+          style.pointerEvents = 'auto';
+        } else if (distance <= maxVisibleDistance) { // Cards visible on sides
+          // Smooth scale curve: starts at 0.95 for adjacent, decreases smoothly
+          const scaleProgress = distance / maxVisibleDistance;
+          const scale = 1 - (scaleProgress * 0.15); // Scale from 1.0 to 0.85
+          
+          // Smooth opacity curve: fades more gradually
+          const opacityProgress = distance / maxVisibleDistance;
+          const opacity = 1 - (opacityProgress * 0.7); // Opacity from 1.0 to 0.3
+          
+          // Parallax effect: side cards move less when dragging
+          const parallaxFactor = 0.4 - (distance * 0.1);
+          style.transform = `translateX(${baseTranslateX + dragOffset * Math.max(0.1, parallaxFactor)}px) scale(${scale})`;
+          style.opacity = Math.max(0.15, opacity);
+          style.zIndex = totalCards - distance;
+          style.pointerEvents = distance <= 1 ? 'auto' : 'none';
         } else { // Cards that are out of view
-          style.transform = 'scale(0)';
+          style.transform = `translateX(${baseTranslateX}px) scale(0.8)`;
           style.opacity = 0;
           style.zIndex = 0;
+          style.pointerEvents = 'none';
         }
 
         const tagClasses = (type: 'featured' | 'default') => type === 'featured' 
@@ -168,35 +202,35 @@ export const TestimonialStack = ({ testimonials, visibleBehind = 2, autoSwipeInt
             onMouseDown={(e) => handleDragStart(e, index)}
             onTouchStart={(e) => handleDragStart(e, index)}
           >
-            <div className="p-6 md:p-8">
-              <div className="flex items-start justify-between mb-6">
-                <div className="flex items-center gap-4">
-                  <div className="flex-shrink-0 w-11 h-11 rounded-xl flex items-center justify-center text-white font-semibold text-base" style={{ background: testimonial.avatarGradient }}>
+            <div className="p-4">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-white font-semibold text-xs" style={{ background: testimonial.avatarGradient }}>
                     {testimonial.initials}
                   </div>
                   <div>
-                    <h3 className="text-zinc-100 font-medium text-lg">{testimonial.name}</h3>
-                    <p className="text-sm text-zinc-400 mt-1">{testimonial.role}</p>
+                    <h3 className="text-zinc-100 font-medium text-sm">{testimonial.name}</h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">{testimonial.role}</p>
                   </div>
                 </div>
               </div>
               
-              <blockquote className="text-zinc-200 leading-relaxed text-lg mb-6">"{testimonial.quote}"</blockquote>
+              <blockquote className="text-zinc-200 leading-relaxed text-sm mb-4">"{testimonial.quote}"</blockquote>
               
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-t border-zinc-800 pt-4 gap-4">
-                <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between border-t border-zinc-800 pt-3 gap-3">
+                <div className="flex flex-wrap gap-1.5">
                   {testimonial.tags.map((tag, i) => (
-                    <span key={i} className={['text-xs', 'px-2', 'py-1', 'rounded-md', 'border', tagClasses(tag.type)].join(' ')}>
+                    <span key={i} className={['text-[10px]', 'px-1.5', 'py-0.5', 'rounded', 'border', tagClasses(tag.type)].join(' ')}>
                       {tag.text}
                     </span>
                   ))}
                 </div>
-                <div className="flex items-center gap-4 text-xs text-zinc-500">
+                <div className="flex items-center gap-3 text-[10px] text-zinc-500">
                   {testimonial.stats.map((stat, i) => {
                     const IconComponent = stat.icon;
                     return (
                       <span key={i} className="flex items-center">
-                        <IconComponent className="mr-1.5 h-3.5 w-3.5" />
+                        <IconComponent className="mr-1 h-3 w-3" />
                         {stat.text}
                       </span>
                     );

@@ -14,19 +14,10 @@ const GoogleIcon = () => (
 
 // --- TYPE DEFINITIONS ---
 
-export interface Testimonial {
-  avatarSrc: string;
-  name: string;
-  handle: string;
-  text: string;
-}
-
 interface SignInPageProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
   heroImageSrc?: string;
-  testimonials?: Testimonial[];
-  testimonialStack?: React.ReactNode;
   onSignIn?: (event: React.FormEvent<HTMLFormElement>) => void;
   onGoogleSignIn?: () => void;
   onResetPassword?: () => void;
@@ -42,25 +33,12 @@ const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
   </div>
 );
 
-const TestimonialCard = ({ testimonial, delay }: { testimonial: Testimonial, delay: string }) => (
-  <div className={`flex items-start gap-3 rounded-3xl bg-zinc-900/60 backdrop-blur-xl border border-zinc-800/50 p-5 w-64`}>
-    <img src={testimonial.avatarSrc} className="h-10 w-10 object-cover rounded-2xl" alt="avatar" />
-    <div className="text-sm leading-snug">
-      <p className="flex items-center gap-1 font-medium text-zinc-200">{testimonial.name}</p>
-      <p className="text-zinc-500">{testimonial.handle}</p>
-      <p className="mt-1 text-zinc-300">{testimonial.text}</p>
-    </div>
-  </div>
-);
-
 // --- MAIN COMPONENT ---
 
 export const SignInPage: React.FC<SignInPageProps> = ({
   title = <span className="font-light text-zinc-100 tracking-tighter">Welcome</span>,
   description = "Access your account and continue your journey with us",
   heroImageSrc,
-  testimonials = [],
-  testimonialStack,
   onSignIn,
   onGoogleSignIn,
   onResetPassword,
@@ -72,7 +50,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
   return (
     <div className="h-[100dvh] flex flex-col md:flex-row font-sans w-[100dvw] bg-zinc-950 text-zinc-200">
       {/* Left column: sign-in form */}
-      <section className="flex-1 flex items-center justify-center p-8">
+      <section className="flex-[0.4] flex items-center justify-center p-8">
         <div className="w-full max-w-md">
           <div className="flex flex-col gap-6">
             <h1 className="text-4xl md:text-5xl font-semibold leading-tight">{title}</h1>
@@ -133,9 +111,9 @@ export const SignInPage: React.FC<SignInPageProps> = ({
         </div>
       </section>
 
-      {/* Right column: testimonial swiper */}
+      {/* Right column: background only */}
       {heroImageSrc && (
-        <section className="hidden md:block flex-1 relative p-4 overflow-hidden">
+        <section className="hidden md:block flex-[0.6] relative p-4 overflow-hidden">
           <div className="absolute inset-4 rounded-3xl overflow-hidden">
             {/* Background image layer */}
             <div 
@@ -144,12 +122,6 @@ export const SignInPage: React.FC<SignInPageProps> = ({
             />
             {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 via-zinc-950/60 to-zinc-950/80" />
-            {/* Testimonial stack */}
-            {testimonialStack && (
-              <div className="relative z-10 w-full h-full">
-                {testimonialStack}
-              </div>
-            )}
           </div>
         </section>
       )}
