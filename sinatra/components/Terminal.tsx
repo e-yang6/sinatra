@@ -55,15 +55,15 @@ export const Terminal: React.FC<TerminalProps> = ({ isRecording, audioLevels, he
     };
   }, [isResizing, onHeightChange]);
 
-  // Generate frequency bars visualization
+  // Generate accurate frequency spectrum visualization
   const renderAudioBars = () => {
     if (!isRecording || audioLevels.length === 0) {
       return (
-        <div className="flex items-center gap-1 h-8">
-          {Array.from({ length: 40 }).map((_, i) => (
+        <div className="flex items-end gap-[2px] h-12 w-full bg-zinc-900 rounded px-1 py-1">
+          {Array.from({ length: 60 }).map((_, i) => (
             <div
               key={i}
-              className="w-1 bg-zinc-800 rounded-full"
+              className="w-[3px] bg-zinc-800 rounded-sm"
               style={{ height: '2px' }}
             />
           ))}
@@ -72,15 +72,34 @@ export const Terminal: React.FC<TerminalProps> = ({ isRecording, audioLevels, he
     }
 
     return (
-      <div className="flex items-end gap-0.5 h-8">
+      <div className="flex items-end gap-[2px] h-12 w-full bg-zinc-900 rounded px-1 py-1">
         {audioLevels.map((level, i) => {
-          const height = Math.max(2, level * 100);
-          const color = level > 0.7 ? 'bg-red-500' : level > 0.4 ? 'bg-yellow-500' : 'bg-green-500';
+          // Apply logarithmic scaling for visual accuracy
+          const scaledLevel = Math.pow(level, 0.6); // Gamma correction for better visual representation
+          const height = Math.max(2, scaledLevel * 100);
+          
+          // Color gradient based on frequency and amplitude
+          // Lower frequencies (left) are cooler, higher (right) are warmer
+          const freqPosition = i / audioLevels.length;
+          let colorClass = 'bg-zinc-600';
+          
+          if (scaledLevel > 0.8) {
+            colorClass = freqPosition < 0.3 ? 'bg-blue-500' : freqPosition < 0.6 ? 'bg-green-500' : 'bg-yellow-500';
+          } else if (scaledLevel > 0.5) {
+            colorClass = freqPosition < 0.3 ? 'bg-blue-600' : freqPosition < 0.6 ? 'bg-green-600' : 'bg-yellow-600';
+          } else if (scaledLevel > 0.2) {
+            colorClass = 'bg-zinc-500';
+          }
+          
           return (
             <div
               key={i}
-              className={`w-1 ${color} rounded-full transition-all duration-75`}
-              style={{ height: `${height}%`, minHeight: '2px' }}
+              className={`w-[3px] ${colorClass} rounded-sm transition-all duration-50`}
+              style={{ 
+                height: `${height}%`, 
+                minHeight: '2px',
+                opacity: Math.max(0.3, scaledLevel)
+              }}
             />
           );
         })}
@@ -111,14 +130,16 @@ export const Terminal: React.FC<TerminalProps> = ({ isRecording, audioLevels, he
         className="flex-1 overflow-y-auto px-3 py-2 text-zinc-400"
       >
         {isRecording ? (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-green-500">$</span>
               <span>Recording audio...</span>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-blue-500">→</span>
-              <span>Input level:</span>
+            <div className="flex flex-col gap-1">
+              <div className="flex items-center gap-2 text-zinc-500">
+                <span className="text-blue-500">→</span>
+                <span className="text-[10px]">Frequency Spectrum</span>
+              </div>
               {renderAudioBars()}
             </div>
           </div>

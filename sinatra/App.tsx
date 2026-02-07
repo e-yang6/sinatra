@@ -315,21 +315,43 @@ const App: React.FC = () => {
       lowpass.connect(processor);
       processor.connect(ctx.destination);
 
-      // Start audio level visualization
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      // Start audio level visualization with better frequency analysis
+      const frequencyData = new Uint8Array(analyser.frequencyBinCount);
+      const waveformData = new Uint8Array(analyser.fftSize);
       const isRecordingRef = { current: true };
+      
       const updateLevels = () => {
         if (!analyserRef.current || !isRecordingRef.current) {
           animationFrameRef.current = null;
           return;
         }
-        analyserRef.current.getByteFrequencyData(dataArray);
-        // Convert to normalized levels (0-1) and take every 4th value for 40 bars
+        
+        // Get frequency data
+        analyserRef.current.getByteFrequencyData(frequencyData);
+        // Get waveform data for more accurate visualization
+        analyserRef.current.getByteTimeDomainData(waveformData);
+        
+        // Use logarithmic scaling for better frequency representation
+        // Map frequencies more accurately (lower frequencies get more bars)
+        const numBars = 60;
         const levels: number[] = [];
-        for (let i = 0; i < 40; i++) {
-          const index = Math.floor((i / 40) * dataArray.length);
-          levels.push(dataArray[index] / 255);
+        
+        for (let i = 0; i < numBars; i++) {
+          // Logarithmic mapping for better frequency distribution
+          const logIndex = Math.pow(i / numBars, 1.5) * frequencyData.length;
+          const index = Math.floor(logIndex);
+          const nextIndex = Math.min(index + 1, frequencyData.length - 1);
+          
+          // Interpolate between adjacent bins for smoother visualization
+          const value = frequencyData[index];
+          const nextValue = frequencyData[nextIndex];
+          const interpolated = value + (nextValue - value) * (logIndex - index);
+          
+          // Normalize and apply smoothing
+          const normalized = Math.min(1, interpolated / 255);
+          levels.push(normalized);
         }
+        
         setAudioLevels(levels);
         animationFrameRef.current = requestAnimationFrame(updateLevels);
       };
