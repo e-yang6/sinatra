@@ -38,7 +38,7 @@ py -3.12 -m venv venv
 pip install -r requirements.txt
 
 # Set SoundFont path (replace with your actual path)
-$env:SOUNDFONT_PATH="C:\soundfonts\FluidR3_GM.sf2"
+$env:SOUNDFONT_PATH="C:\Users\jerem\Downloads\FluidR3_GM\FluidR3_GM.sf2"
 
 # Start server
 uvicorn main:app --reload --port 8000

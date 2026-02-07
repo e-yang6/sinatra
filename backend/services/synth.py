@@ -8,7 +8,8 @@ try:
     if hasattr(os, 'add_dll_directory'):
         # Try common FluidSynth installation paths
         possible_paths = [
-            'C:\\Users\\tteth\\Downloads\\fluidsynth-v2.5.2-win10-x64-cpp11\\fluidsynth-v2.5.2-win10-x64-cpp11\\bin',  # User's location
+            'C:\\Users\\jerem\\Downloads\\fluidsynth-v2.5.2-win10-x64-cpp11\\fluidsynth-v2.5.2-win10-x64-cpp11\\bin',  # User's location
+            'C:\\Users\\ttethfluidsynth-v2.5.2-win10-x64-cpp11\\fluidsynth-v2.5.2-win10-x64-cpp11\\bin',  # Other user's location
             'C:\\tools\\fluidsynth\\bin',
             'C:\\Program Files\\FluidSynth\\bin',
             'C:\\Program Files (x86)\\FluidSynth\\bin',
@@ -36,7 +37,7 @@ from utils.file_helpers import generate_filepath
 # --- SoundFont Configuration ---
 SOUNDFONT_PATH = os.environ.get(
     "SOUNDFONT_PATH",
-    "C:/soundfonts/FluidR3_GM.sf2"
+    "C:/Users/jerem/Downloads/FluidR3_GM/FluidR3_GM.sf2"
 )
 
 # General MIDI program numbers for our instrument types
@@ -54,7 +55,7 @@ def _find_soundfont() -> str:
     """Try common SoundFont locations, return the first that exists."""
     candidates = [
         SOUNDFONT_PATH,
-        "C:/Users/tteth/Downloads/FluidR3_GM/FluidR3_GM.sf2",  # User's location
+        "C:/Users/jerem/Downloads/FluidR3_GM/FluidR3_GM.sf2",  # User's location
         "C:/soundfonts/FluidR3_GM.sf2",
         "C:/soundfonts/default.sf2",
         os.path.expanduser("~/soundfonts/FluidR3_GM.sf2"),
