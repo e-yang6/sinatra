@@ -156,7 +156,11 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
+<<<<<<< Updated upstream
         content: userFriendlyMessage + ' Please check the browser console for more details.',
+=======
+        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}. Make sure the backend is running and OPENROUTER_API_KEY is set.`,
+>>>>>>> Stashed changes
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -202,7 +206,28 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-2">
             <Bot size={16} className="text-[#c9a961]" />
+<<<<<<< Updated upstream
             <span className="text-sm font-medium text-zinc-300">AI Assistant</span>
+=======
+            <span className="text-sm font-medium text-zinc-300">Frank</span>
+            <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">OpenRouter</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleClearChat}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              title="Clear chat"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              title="Close chat"
+            >
+              <X size={16} />
+            </button>
+>>>>>>> Stashed changes
           </div>
           <button
             onClick={() => setIsOpen(false)}
