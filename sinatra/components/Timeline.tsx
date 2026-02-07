@@ -173,18 +173,17 @@ export const Timeline: React.FC<TimelineProps> = ({
                 );
               })}
 
-              <div className="flex h-24" style={{ width: CONTROLS_WIDTH + contentWidthPx }}>
-                <div className="w-32 shrink-0 border-r border-zinc-800 p-2 flex items-center">
-                  <button
-                    onClick={onAddTrack}
-                    className="w-full h-full border border-dashed border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/30 flex items-center justify-center gap-2 text-zinc-600 hover:text-zinc-300 transition-all rounded"
-                  >
-                    <Plus size={14} />
-                    <span className="text-xs">Add Track</span>
-                  </button>
+              <button
+                onClick={onAddTrack}
+                className="h-12 border border-dashed border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/30 flex items-center gap-2 text-zinc-600 hover:text-zinc-300 transition-all"
+                style={{ width: CONTROLS_WIDTH + contentWidthPx }}
+              >
+                <div className="w-32 shrink-0 flex items-center gap-2 px-2">
+                  <Plus size={14} />
+                  <span className="text-xs">Add Track</span>
                 </div>
                 <div className="flex-1" />
-              </div>
+              </button>
             </div>
 
             <div

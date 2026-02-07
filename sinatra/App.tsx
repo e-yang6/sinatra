@@ -79,7 +79,38 @@ const App: React.FC = () => {
   const animationFrameRef = useRef<number | null>(null);
   
   // ---- Terminal state ----
-  const [terminalHeight, setTerminalHeight] = useState(96);
+  const [terminalHeight, setTerminalHeight] = useState(220);
+  const [recordingSessions, setRecordingSessions] = useState<Array<{
+    id: string;
+    startTime: Date;
+    endTime?: Date;
+    duration?: number;
+    status: 'success' | 'error' | 'in_progress';
+    message?: string;
+    sampleRate?: number;
+    peakAmplitude?: number;
+  }>>([]);
+  const [currentPeakLevel, setCurrentPeakLevel] = useState(0);
+  const [currentAvgLevel, setCurrentAvgLevel] = useState(0);
+
+  // ---- Master volume state ----
+  const [masterVolume, setMasterVolume] = useState(1.0);
+
+  // Apply master volume to all audio elements
+  useEffect(() => {
+    trackAudioMapRef.current.forEach((el, trackId) => {
+      const track = tracks.find(t => t.id === trackId);
+      if (track) {
+        el.volume = track.volume * masterVolume;
+      }
+    });
+    if (drumAudioElRef.current) {
+      const drumTrack = tracks.find(t => t.id === '1');
+      if (drumTrack) {
+        drumAudioElRef.current.volume = drumTrack.volume * masterVolume;
+      }
+    }
+  }, [masterVolume, tracks]);
 
   // ---- Audio for playback ----
   const trackAudioMapRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -200,7 +231,7 @@ const App: React.FC = () => {
     // Set volume from track state
     const drumTrack = tracks.find(t => t.id === '1');
     if (drumTrack) {
-      el.volume = drumTrack.volume;
+      el.volume = drumTrack.volume * masterVolume;
     }
     // Seek within the loop
     if (el.duration) {
@@ -320,6 +351,16 @@ const App: React.FC = () => {
       lowpass.connect(processor);
       processor.connect(ctx.destination);
 
+      // Create new recording session
+      const sessionId = Date.now().toString();
+      const sessionStartTime = new Date();
+      setRecordingSessions(prev => [...prev, {
+        id: sessionId,
+        startTime: sessionStartTime,
+        status: 'in_progress',
+        message: 'Recording started',
+      }]);
+
       // Start audio level visualization with better frequency analysis
       const frequencyData = new Uint8Array(analyser.frequencyBinCount);
       const waveformData = new Uint8Array(analyser.fftSize);
@@ -335,6 +376,18 @@ const App: React.FC = () => {
         analyserRef.current.getByteFrequencyData(frequencyData);
         // Get waveform data for more accurate visualization
         analyserRef.current.getByteTimeDomainData(waveformData);
+        
+        // Calculate peak and average levels
+        let peak = 0;
+        let sum = 0;
+        for (let i = 0; i < waveformData.length; i++) {
+          const normalized = Math.abs((waveformData[i] - 128) / 128);
+          peak = Math.max(peak, normalized);
+          sum += normalized;
+        }
+        const avg = sum / waveformData.length;
+        setCurrentPeakLevel(peak);
+        setCurrentAvgLevel(avg);
         
         // Use logarithmic scaling for better frequency representation
         // Map frequencies more accurately (lower frequencies get more bars)
@@ -398,6 +451,18 @@ const App: React.FC = () => {
       console.error('[Sinatra] Mic error:', err);
       setError(err?.message || 'Could not access microphone');
       setStatusMessage('Error');
+      
+      // Update the latest session if it exists to mark it as error
+      setRecordingSessions(prev => {
+        const updated = [...prev];
+        const latestSession = updated[updated.length - 1];
+        if (latestSession && latestSession.status === 'in_progress') {
+          latestSession.status = 'error';
+          latestSession.message = err?.message || 'Could not access microphone';
+          latestSession.endTime = new Date();
+        }
+        return updated;
+      });
     }
   };
 
@@ -417,6 +482,8 @@ const App: React.FC = () => {
     }
     analyserRef.current = null;
     setAudioLevels([]);
+    setCurrentPeakLevel(0);
+    setCurrentAvgLevel(0);
 
     // Stop all other tracks
     trackAudioMapRef.current.forEach(el => {
@@ -428,10 +495,45 @@ const App: React.FC = () => {
     mediaStreamRef.current?.getTracks().forEach(t => t.stop());
 
     const sampleRate = audioCtxRef.current?.sampleRate ?? 44100;
+    const endTime = new Date();
     audioCtxRef.current?.close();
 
     const chunks = recordedChunksRef.current;
     console.log(`[Sinatra] Recording stopped. ${chunks.length} chunks captured at ${sampleRate}Hz`);
+
+    // Update the latest recording session
+    setRecordingSessions(prev => {
+      const updated = [...prev];
+      const latestSession = updated[updated.length - 1];
+      if (latestSession && latestSession.status === 'in_progress') {
+        const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
+        const totalSeconds = totalLength / sampleRate;
+        const merged = new Float32Array(totalLength);
+        let offset = 0;
+        for (const chunk of chunks) {
+          merged.set(chunk, offset);
+          offset += chunk.length;
+        }
+        const maxAmp = merged.reduce((max, s) => Math.max(max, Math.abs(s)), 0);
+        
+        latestSession.endTime = endTime;
+        latestSession.duration = totalSeconds;
+        latestSession.sampleRate = sampleRate;
+        latestSession.peakAmplitude = maxAmp;
+        
+        if (chunks.length === 0) {
+          latestSession.status = 'error';
+          latestSession.message = 'No audio captured';
+        } else if (maxAmp < 0.001) {
+          latestSession.status = 'error';
+          latestSession.message = 'Recording was silent';
+        } else {
+          latestSession.status = 'success';
+          latestSession.message = `Captured ${totalSeconds.toFixed(1)}s`;
+        }
+      }
+      return updated;
+    });
 
     if (chunks.length === 0) {
       setError('No audio was captured — check your mic permissions');
@@ -795,6 +897,47 @@ const App: React.FC = () => {
   }, [metronome, isPlaying, isRecording, bpm, startMetronome, stopMetronome]);
 
   // ==============================
+  //  EXPORT
+  // ==============================
+  const handleExport = async () => {
+    try {
+      setStatusMessage('Exporting...');
+      const tracksWithAudio = tracks.filter(t => t.audioUrl && t.id !== '1');
+      if (tracksWithAudio.length === 0) {
+        setError('No tracks to export');
+        return;
+      }
+      
+      const longestTrack = tracksWithAudio.reduce((longest, track) => {
+        const longestDur = longest.audioDuration || 0;
+        const trackDur = track.audioDuration || 0;
+        return trackDur > longestDur ? track : longest;
+      }, tracksWithAudio[0]);
+
+      if (longestTrack.audioUrl) {
+        const response = await fetch(longestTrack.audioUrl);
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sinatra-export-${Date.now()}.wav`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setStatusMessage('Export complete');
+      }
+    } catch (err) {
+      setError('Export failed');
+      setStatusMessage('Error');
+    }
+  };
+
+  // Calculate project stats
+  const trackCount = tracks.filter(t => t.id !== '1' && t.audioUrl).length;
+  const totalDuration = Math.max(...tracks.map(t => t.audioDuration || 0), 0);
+
+  // ==============================
   //  RENDER
   // ==============================
   return (
@@ -821,6 +964,11 @@ const App: React.FC = () => {
           onAddTrack={addTrack}
           selectedTrackName={selectedTrack?.name || 'None'}
           isDrumSelected={selectedTrackId === '1'}
+          masterVolume={masterVolume}
+          onMasterVolumeChange={setMasterVolume}
+          onExport={handleExport}
+          trackCount={trackCount}
+          totalDuration={totalDuration}
         />
 
         <Timeline
@@ -842,6 +990,9 @@ const App: React.FC = () => {
         audioLevels={audioLevels}
         height={terminalHeight}
         onHeightChange={setTerminalHeight}
+        recordingSessions={recordingSessions}
+        currentPeakLevel={currentPeakLevel}
+        currentAvgLevel={currentAvgLevel}
       />
     </div>
   );

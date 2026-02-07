@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Upload, Mic, Plus, ChevronDown } from 'lucide-react';
+import { Upload, Mic, ChevronDown, Volume2, Download } from 'lucide-react';
 import { InstrumentType } from '../types';
 
 interface CustomSelectProps {
@@ -76,6 +76,11 @@ interface SidebarLeftProps {
   onAddTrack: () => void;
   selectedTrackName: string;
   isDrumSelected: boolean;
+  masterVolume?: number;
+  onMasterVolumeChange?: (volume: number) => void;
+  onExport?: () => void;
+  trackCount?: number;
+  totalDuration?: number;
 }
 
 export const SidebarLeft: React.FC<SidebarLeftProps> = ({
@@ -87,6 +92,11 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onAddTrack,
   selectedTrackName,
   isDrumSelected,
+  masterVolume = 1.0,
+  onMasterVolumeChange,
+  onExport,
+  trackCount = 0,
+  totalDuration = 0,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -132,22 +142,6 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         />
       </div>
 
-      <button
-        onClick={onAddTrack}
-        className="h-8 border border-zinc-800 rounded px-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2 shrink-0"
-      >
-        <Plus size={14} />
-        Add Track
-      </button>
-
-      <div className="border border-zinc-800 rounded p-2 shrink-0 flex flex-col items-center justify-center text-center min-h-[60px]">
-        <label className="text-[10px] text-zinc-600">Selected Track</label>
-        <p className="text-xs text-zinc-300 mt-1 truncate">{selectedTrackName}</p>
-        {isDrumSelected && (
-          <p className="text-[10px] text-zinc-600 mt-1">Select a vocal track to record</p>
-        )}
-      </div>
-
       {!isDrumSelected && (
         <div className="flex flex-col gap-2 shrink-0">
           <button 
@@ -177,6 +171,50 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
           />
         </div>
       )}
+
+      <div className="flex flex-col gap-2 shrink-0 mt-auto">
+        <div className="flex flex-col gap-2 shrink-0">
+          <label className="text-[10px] text-zinc-600">Master Volume</label>
+          <div className="flex items-center gap-2">
+            <Volume2 size={12} className="text-zinc-500" />
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={masterVolume}
+              onChange={(e) => onMasterVolumeChange?.(parseFloat(e.target.value))}
+              className="flex-1 h-0.5 bg-zinc-800 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-1.5 [&::-webkit-slider-thumb]:h-1.5 [&::-webkit-slider-thumb]:bg-zinc-500 [&::-webkit-slider-thumb]:rounded-full"
+            />
+            <span className="text-[10px] font-mono text-zinc-500 w-8 text-right">{Math.round(masterVolume * 100)}</span>
+          </div>
+        </div>
+
+        {onExport && (
+          <button
+            onClick={onExport}
+            className="h-8 border border-zinc-800 rounded px-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2 shrink-0"
+          >
+            <Download size={12} />
+            Export
+          </button>
+        )}
+
+        <div className="border border-zinc-800 rounded p-2 shrink-0">
+          <div className="text-[10px] text-zinc-600 space-y-0.5">
+            <div className="flex justify-between">
+              <span>Tracks:</span>
+              <span className="text-zinc-400 font-mono">{trackCount}</span>
+            </div>
+            {totalDuration > 0 && (
+              <div className="flex justify-between">
+                <span>Duration:</span>
+                <span className="text-zinc-400 font-mono">{Math.floor(totalDuration / 60)}:{Math.floor(totalDuration % 60).toString().padStart(2, '0')}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
       
     </aside>
   );

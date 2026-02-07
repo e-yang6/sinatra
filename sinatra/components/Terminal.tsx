@@ -1,13 +1,35 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 
+interface RecordingSession {
+  id: string;
+  startTime: Date;
+  endTime?: Date;
+  duration?: number;
+  status: 'success' | 'error' | 'in_progress';
+  message?: string;
+  sampleRate?: number;
+  peakAmplitude?: number;
+}
+
 interface TerminalProps {
   isRecording: boolean;
   audioLevels: number[];
   height?: number;
   onHeightChange?: (height: number) => void;
+  recordingSessions?: RecordingSession[];
+  currentPeakLevel?: number;
+  currentAvgLevel?: number;
 }
 
-export const Terminal: React.FC<TerminalProps> = ({ isRecording, audioLevels, height = 96, onHeightChange }) => {
+export const Terminal: React.FC<TerminalProps> = ({ 
+  isRecording, 
+  audioLevels, 
+  height = 220, 
+  onHeightChange,
+  recordingSessions = [],
+  currentPeakLevel = 0,
+  currentAvgLevel = 0,
+}) => {
   const terminalRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
   const [isResizing, setIsResizing] = useState(false);
@@ -18,7 +40,7 @@ export const Terminal: React.FC<TerminalProps> = ({ isRecording, audioLevels, he
     if (terminalRef.current) {
       terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
     }
-  }, [audioLevels]);
+  }, [audioLevels, recordingSessions]);
 
   // Update local height when prop changes
   useEffect(() => {
@@ -125,30 +147,94 @@ export const Terminal: React.FC<TerminalProps> = ({ isRecording, audioLevels, he
           <span className="text-red-500 animate-pulse">● REC</span>
         )}
       </div>
-      <div
-        ref={terminalRef}
-        className="flex-1 overflow-y-auto px-3 py-2 text-zinc-400"
-      >
-        {isRecording ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-green-500">$</span>
-              <span>Recording audio...</span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2 text-zinc-500">
-                <span style={{ color: '#c9a961' }}>→</span>
-                <span className="text-[10px]">Frequency Spectrum</span>
+      <div className="flex-1 overflow-hidden flex">
+        {/* Left side: Live recording visualization */}
+        <div className="flex-1 border-r border-zinc-800 flex flex-col">
+          <div className="px-3 py-1 border-b border-zinc-800 text-zinc-500 text-[10px]">
+            Live Monitor
+          </div>
+          <div className="flex-1 overflow-y-auto px-3 py-2 text-zinc-400">
+            {isRecording ? (
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2 text-zinc-500">
+                    <span style={{ color: '#c9a961' }}>→</span>
+                    <span className="text-[10px]">Frequency Spectrum</span>
+                  </div>
+                  {renderAudioBars()}
+                </div>
+                <div className="space-y-1 text-[10px]">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Peak:</span>
+                    <span className="text-zinc-300 font-mono">{(currentPeakLevel * 100).toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Avg:</span>
+                    <span className="text-zinc-300 font-mono">{(currentAvgLevel * 100).toFixed(1)}%</span>
+                  </div>
+                </div>
               </div>
-              {renderAudioBars()}
-            </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-600">$</span>
+                <span className="text-zinc-600">Ready. Press record to start.</span>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <span className="text-zinc-600">$</span>
-            <span className="text-zinc-600">Ready. Press record to start.</span>
+        </div>
+
+        {/* Right side: Recording session log */}
+        <div className="flex-1 flex flex-col">
+          <div className="px-3 py-1 border-b border-zinc-800 text-zinc-500 text-[10px]">
+            Session Log
           </div>
-        )}
+          <div
+            ref={terminalRef}
+            className="flex-1 overflow-y-auto px-3 py-2 text-zinc-400 space-y-2"
+          >
+            {recordingSessions.length === 0 ? (
+              <div className="text-zinc-600 text-[10px]">No recordings yet</div>
+            ) : (
+              recordingSessions.slice().reverse().map((session) => (
+                <div key={session.id} className="text-[10px] space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className={session.status === 'success' ? 'text-green-500' : session.status === 'error' ? 'text-red-500' : 'text-yellow-500'}>
+                      {session.status === 'success' ? '✓' : session.status === 'error' ? '✗' : '●'}
+                    </span>
+                    <span className="text-zinc-300">
+                      {session.startTime.toLocaleTimeString()}
+                    </span>
+                    {session.endTime && (
+                      <span className="text-zinc-500">
+                        → {session.endTime.toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                  {session.duration !== undefined && (
+                    <div className="pl-4 text-zinc-500">
+                      Duration: <span className="text-zinc-300 font-mono">{session.duration.toFixed(1)}s</span>
+                    </div>
+                  )}
+                  {session.sampleRate && (
+                    <div className="pl-4 text-zinc-500">
+                      Sample Rate: <span className="text-zinc-300 font-mono">{session.sampleRate}Hz</span>
+                    </div>
+                  )}
+                  {session.peakAmplitude !== undefined && (
+                    <div className="pl-4 text-zinc-500">
+                      Peak: <span className="text-zinc-300 font-mono">{(session.peakAmplitude * 100).toFixed(1)}%</span>
+                    </div>
+                  )}
+                  {session.message && (
+                    <div className="pl-4 text-zinc-500 italic">
+                      {session.message}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
