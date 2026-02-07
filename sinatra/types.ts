@@ -47,6 +47,15 @@ export enum KeyScale {
   CHROMATIC = 'Chromatic'
 }
 
+export interface Clip {
+  id: string;
+  startSec: number;              // Where the clip starts on the timeline (seconds)
+  durationSec: number;           // Visible/audible duration after trimming (seconds)
+  audioUrl: string;               // Blob URL for the audio data
+  offsetSec: number;              // Trim offset into the audio file (seconds, for left-edge trim)
+  originalDurationSec: number;    // Full untrimmed audio duration (seconds)
+}
+
 export interface Note {
   id: string;
   startTick: number; // 0-100% of the view for simplicity in this MVP
@@ -61,9 +70,10 @@ export interface TrackData {
   volume: number;
   isMuted: boolean;
   isSolo: boolean;
-  audioUrl?: string; // URL to the audio file for display
+  audioUrl?: string; // URL to the audio file for display (drum track)
   instrument?: InstrumentType; // Instrument assigned to this track
-  audioDuration?: number; // Duration in seconds for waveform sync
+  audioDuration?: number; // Duration in seconds (drum track)
   color?: string; // Hex color for track customization
   unmutedVolume?: number; // Volume before muting (for restoration)
+  clips?: Clip[]; // Audio clips on this track
 }

@@ -4,9 +4,13 @@ interface WaveformProps {
   audioUrl?: string;
   numBars?: number;
   color?: string;
+  /** Offset into the audio to start displaying (seconds). Used for trimmed clips. */
+  offsetSec?: number;
+  /** Duration of audio to display (seconds). Used for trimmed clips. */
+  visibleDurationSec?: number;
 }
 
-export const Waveform: React.FC<WaveformProps> = ({ audioUrl, numBars = 200, color }) => {
+export const Waveform: React.FC<WaveformProps> = ({ audioUrl, numBars = 200, color, offsetSec = 0, visibleDurationSec }) => {
   const [waveformData, setWaveformData] = useState<number[]>([]);
 
   useEffect(() => {
@@ -23,13 +27,26 @@ export const Waveform: React.FC<WaveformProps> = ({ audioUrl, numBars = 200, col
         const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
 
         const channelData = audioBuffer.getChannelData(0);
-        const length = channelData.length;
-        const step = Math.floor(length / numBars);
+        const sampleRate = audioBuffer.sampleRate;
+
+        // Calculate the visible slice of the audio
+        const startSample = Math.floor(offsetSec * sampleRate);
+        const endSample = visibleDurationSec
+          ? Math.min(Math.floor((offsetSec + visibleDurationSec) * sampleRate), channelData.length)
+          : channelData.length;
+        const sliceLength = endSample - startSample;
+
+        if (sliceLength <= 0) {
+          setWaveformData([]);
+          return;
+        }
+
+        const step = Math.floor(sliceLength / numBars);
         const bars: number[] = [];
 
         for (let i = 0; i < numBars; i++) {
-          const start = i * step;
-          const end = Math.min(start + step, length);
+          const start = startSample + i * step;
+          const end = Math.min(start + step, endSample);
           let max = 0;
           for (let j = start; j < end; j++) {
             max = Math.max(max, Math.abs(channelData[j]));
@@ -47,7 +64,7 @@ export const Waveform: React.FC<WaveformProps> = ({ audioUrl, numBars = 200, col
     };
 
     fetchAndAnalyze();
-  }, [audioUrl, numBars]);
+  }, [audioUrl, numBars, offsetSec, visibleDurationSec]);
 
   if (waveformData.length === 0) {
     return (

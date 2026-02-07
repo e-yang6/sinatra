@@ -3,14 +3,13 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import { AuthProvider } from './contexts/AuthContext';
 import { HeroPage } from './pages/HeroPage';
 import { ProjectsPage } from './pages/ProjectsPage';
-import Editor from './Editor';
+import { SignInPageRoute } from './pages/SignInPage';
+import { SignUpPageRoute } from './pages/SignUpPage';
+import DAWEditor from './DAWEditor';
 
 const EditorWrapper: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
-  if (!projectId) {
-    return <Navigate to="/projects" replace />;
-  }
-  return <Editor projectId={projectId} />;
+  return <DAWEditor projectId={projectId} />;
 };
 
 const App: React.FC = () => {
@@ -19,6 +18,8 @@ const App: React.FC = () => {
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<HeroPage />} />
+          <Route path="/signin" element={<SignInPageRoute />} />
+          <Route path="/signup" element={<SignUpPageRoute />} />
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/editor/:projectId" element={<EditorWrapper />} />
           <Route path="*" element={<Navigate to="/" replace />} />

@@ -2,12 +2,13 @@ import React, { useRef, useEffect, useState } from 'react';
 import { Track } from './Track';
 import { Waveform } from './Waveform';
 import { PianoRoll } from './PianoRoll';
-import { TrackData, Note } from '../types';
+import { TrackData, Note, Clip } from '../types';
 import { Plus } from 'lucide-react';
 
 const PIXELS_PER_SECOND = 80;
 const MIN_TIMELINE_SEC = 30;
 const CONTROLS_WIDTH = 128; // w-32 = 8rem
+const MIN_CLIP_DURATION = 0.1; // Minimum clip duration in seconds
 
 function formatTime(totalSec: number): string {
   const m = Math.floor(totalSec / 60);
@@ -20,12 +21,15 @@ interface TimelineProps {
   tracks: TrackData[];
   notes: Note[];
   selectedTrackId: string;
+  selectedClipId: string | null;
   isPlaying: boolean;
   onSelectTrack: (id: string) => void;
   onUpdateTrack: (id: string, updates: Partial<TrackData>) => void;
   onAddTrack: () => void;
   onDeleteTrack: (id: string) => void;
   onSeek: (sec: number) => void;
+  onSelectClip: (clipId: string | null) => void;
+  onUpdateClip: (trackId: string, clipId: string, updates: Partial<Clip>) => void;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -33,21 +37,49 @@ export const Timeline: React.FC<TimelineProps> = ({
   tracks,
   notes,
   selectedTrackId,
+  selectedClipId,
   isPlaying,
   onSelectTrack,
   onUpdateTrack,
   onAddTrack,
   onDeleteTrack,
   onSeek,
+  onSelectClip,
+  onUpdateClip,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
 
-  // Calculate timeline width from longest track
+  // Clip drag state (move)
+  const [draggingClip, setDraggingClip] = useState<{
+    trackId: string;
+    clipId: string;
+    startX: number;
+    originalStartSec: number;
+  } | null>(null);
+
+  // Clip resize state
+  const [resizingClip, setResizingClip] = useState<{
+    trackId: string;
+    clipId: string;
+    edge: 'left' | 'right';
+    startX: number;
+    originalStartSec: number;
+    originalDurationSec: number;
+    originalOffsetSec: number;
+    originalFullDuration: number;
+  } | null>(null);
+
+  // Calculate timeline width from longest track (including clips)
   const maxDuration = Math.max(
     MIN_TIMELINE_SEC,
-    ...tracks.map(t => t.audioDuration || 0),
+    ...tracks.map(t => {
+      if (t.clips && t.clips.length > 0) {
+        return Math.max(...t.clips.map(c => c.startSec + c.durationSec));
+      }
+      return t.audioDuration || 0;
+    }),
     playheadSec + 10,
   );
   const contentWidthPx = maxDuration * PIXELS_PER_SECOND;
@@ -63,6 +95,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const sec = Math.max(0, x / PIXELS_PER_SECOND);
+    onSelectClip(null);
     onSeek(sec);
   };
 
@@ -79,7 +112,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     }
   }, [playheadSec, isPlaying, isDraggingPlayhead]);
 
-  // Handle playhead dragging
+  // ---- Playhead dragging ----
   const handlePlayheadMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -92,25 +125,117 @@ export const Timeline: React.FC<TimelineProps> = ({
     const handleMouseMove = (e: MouseEvent) => {
       if (!scrollRef.current) return;
       const rect = scrollRef.current.getBoundingClientRect();
-      const x = e.clientX - rect.left - CONTROLS_WIDTH;
+      const x = e.clientX - rect.left - CONTROLS_WIDTH + scrollRef.current.scrollLeft;
       const sec = Math.max(0, x / PIXELS_PER_SECOND);
       onSeek(sec);
     };
 
-    const handleMouseUp = () => {
-      setIsDraggingPlayhead(false);
-    };
+    const handleMouseUp = () => setIsDraggingPlayhead(false);
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
-
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
   }, [isDraggingPlayhead, onSeek]);
 
+  // ---- Clip move dragging ----
+  const handleClipMouseDown = (e: React.MouseEvent, trackId: string, clip: Clip) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectClip(clip.id);
+    setDraggingClip({
+      trackId,
+      clipId: clip.id,
+      startX: e.clientX,
+      originalStartSec: clip.startSec,
+    });
+  };
+
+  useEffect(() => {
+    if (!draggingClip) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - draggingClip.startX;
+      const dSec = dx / PIXELS_PER_SECOND;
+      const newStartSec = Math.max(0, draggingClip.originalStartSec + dSec);
+      onUpdateClip(draggingClip.trackId, draggingClip.clipId, { startSec: newStartSec });
+    };
+
+    const handleMouseUp = () => setDraggingClip(null);
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [draggingClip, onUpdateClip]);
+
+  // ---- Clip resize dragging ----
+  const handleResizeMouseDown = (e: React.MouseEvent, trackId: string, clip: Clip, edge: 'left' | 'right') => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectClip(clip.id);
+    setResizingClip({
+      trackId,
+      clipId: clip.id,
+      edge,
+      startX: e.clientX,
+      originalStartSec: clip.startSec,
+      originalDurationSec: clip.durationSec,
+      originalOffsetSec: clip.offsetSec || 0,
+      originalFullDuration: clip.originalDurationSec || clip.durationSec,
+    });
+  };
+
+  useEffect(() => {
+    if (!resizingClip) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const dx = e.clientX - resizingClip.startX;
+      const dSec = dx / PIXELS_PER_SECOND;
+
+      if (resizingClip.edge === 'right') {
+        // Right edge: change duration only
+        const maxDuration = resizingClip.originalFullDuration - resizingClip.originalOffsetSec;
+        const newDuration = Math.max(MIN_CLIP_DURATION, Math.min(maxDuration, resizingClip.originalDurationSec + dSec));
+        onUpdateClip(resizingClip.trackId, resizingClip.clipId, {
+          durationSec: newDuration,
+        });
+      } else {
+        // Left edge: change startSec, offsetSec, and durationSec
+        // dSec > 0 means dragging right (trimming start)
+        // dSec < 0 means dragging left (extending start, if offset allows)
+        const maxTrimRight = resizingClip.originalDurationSec - MIN_CLIP_DURATION;
+        const maxTrimLeft = resizingClip.originalOffsetSec; // can't go before audio start
+        const clampedDSec = Math.max(-maxTrimLeft, Math.min(maxTrimRight, dSec));
+
+        const newStartSec = Math.max(0, resizingClip.originalStartSec + clampedDSec);
+        const newOffsetSec = resizingClip.originalOffsetSec + clampedDSec;
+        const newDuration = resizingClip.originalDurationSec - clampedDSec;
+
+        onUpdateClip(resizingClip.trackId, resizingClip.clipId, {
+          startSec: newStartSec,
+          offsetSec: Math.max(0, newOffsetSec),
+          durationSec: Math.max(MIN_CLIP_DURATION, newDuration),
+        });
+      }
+    };
+
+    const handleMouseUp = () => setResizingClip(null);
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingClip, onUpdateClip]);
+
   const playheadPx = playheadSec * PIXELS_PER_SECOND;
+  const isAnyDrag = !!draggingClip || !!resizingClip;
 
   return (
     <div className="flex-1 bg-zinc-950 overflow-hidden flex flex-col">
@@ -159,7 +284,10 @@ export const Timeline: React.FC<TimelineProps> = ({
 
             <div className="relative z-10 space-y-2">
               {tracks.map((track) => {
-                const waveformWidthPx = Math.max(4, (track.audioDuration || 0) * PIXELS_PER_SECOND);
+                const isDrumTrack = track.id === '1';
+                const waveformWidthPx = isDrumTrack
+                  ? Math.max(4, (track.audioDuration || 0) * PIXELS_PER_SECOND)
+                  : 0;
                 const numBars = Math.max(50, Math.min(600, Math.floor(waveformWidthPx / 3)));
 
                 return (
@@ -174,10 +302,14 @@ export const Timeline: React.FC<TimelineProps> = ({
                     onMuteToggle={() => onUpdateTrack(track.id, { isMuted: !track.isMuted })}
                     onColorChange={(color) => onUpdateTrack(track.id, { color })}
                     onNameChange={(name) => onUpdateTrack(track.id, { name })}
-                    onSeek={onSeek}
+                    onSeek={(sec) => {
+                      onSelectClip(null);
+                      onSeek(sec);
+                    }}
                     onDelete={track.id !== '1' ? () => onDeleteTrack(track.id) : undefined}
                   >
-                    {track.audioUrl ? (
+                    {isDrumTrack && track.audioUrl ? (
+                      /* ---- Drum track: single waveform ---- */
                       <div
                         className="h-full overflow-hidden cursor-pointer"
                         style={{
@@ -189,17 +321,127 @@ export const Timeline: React.FC<TimelineProps> = ({
                           const rect = e.currentTarget.getBoundingClientRect();
                           const x = e.clientX - rect.left;
                           const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                          onSelectClip(null);
                           onSeek(sec);
                         }}
-                        title="Click to seek"
                       >
                         <Waveform audioUrl={track.audioUrl} numBars={numBars} color={track.color} />
                       </div>
-                    ) : track.type === 'midi' ? (
-                      <PianoRoll notes={notes} colorClass="bg-zinc-600" />
+                    ) : (track.clips && track.clips.length > 0) ? (
+                      /* ---- Track with clips: render positioned blocks ---- */
+                      <div
+                        className="relative w-full h-full"
+                        onClick={(e) => {
+                          if (e.target === e.currentTarget) {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                            onSelectClip(null);
+                            onSeek(sec);
+                          }
+                        }}
+                      >
+                        {track.clips.map(clip => {
+                          const clipLeftPx = clip.startSec * PIXELS_PER_SECOND;
+                          const clipWidthPx = Math.max(8, clip.durationSec * PIXELS_PER_SECOND);
+                          const clipNumBars = Math.max(20, Math.floor(clipWidthPx / 3));
+                          const isClipSelected = clip.id === selectedClipId;
+                          const color = track.color || '#6366f1';
+                          const isDragging = draggingClip?.clipId === clip.id;
+                          const isResizing = resizingClip?.clipId === clip.id;
+
+                          return (
+                            <div
+                              key={clip.id}
+                              className={`absolute top-1 bottom-1 rounded overflow-hidden select-none ${
+                                isAnyDrag ? '' : 'transition-shadow'
+                              } ${
+                                isDragging ? 'cursor-grabbing' : isResizing ? 'cursor-col-resize' : 'cursor-grab'
+                              }`}
+                              style={{
+                                left: clipLeftPx,
+                                width: clipWidthPx,
+                                backgroundColor: `${color}15`,
+                                border: isClipSelected
+                                  ? `2px solid ${color}`
+                                  : `1px solid ${color}55`,
+                                boxShadow: isClipSelected
+                                  ? `0 0 8px ${color}33`
+                                  : isDragging || isResizing
+                                    ? `0 0 12px ${color}44`
+                                    : 'none',
+                                zIndex: isClipSelected || isDragging || isResizing ? 10 : 1,
+                              }}
+                              onMouseDown={(e) => handleClipMouseDown(e, track.id, clip)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onSelectClip(clip.id);
+                              }}
+                              title={`${clip.durationSec.toFixed(1)}s — drag to move, edges to resize, Backspace to delete`}
+                            >
+                              {/* Left resize handle */}
+                              <div
+                                className="absolute left-0 top-0 bottom-0 w-1.5 z-20 cursor-col-resize group"
+                                onMouseDown={(e) => handleResizeMouseDown(e, track.id, clip, 'left')}
+                                title="Drag to trim start"
+                              >
+                                <div className="w-full h-full rounded-l opacity-0 group-hover:opacity-100 transition-opacity"
+                                  style={{ backgroundColor: `${color}66` }}
+                                />
+                              </div>
+
+                              {/* Waveform content */}
+                              <div className="absolute inset-0 mx-1.5 overflow-hidden pointer-events-none">
+                                <Waveform
+                                  audioUrl={clip.audioUrl}
+                                  numBars={clipNumBars}
+                                  color={color}
+                                  offsetSec={clip.offsetSec || 0}
+                                  visibleDurationSec={clip.durationSec}
+                                />
+                              </div>
+
+                              {/* Right resize handle */}
+                              <div
+                                className="absolute right-0 top-0 bottom-0 w-1.5 z-20 cursor-col-resize group"
+                                onMouseDown={(e) => handleResizeMouseDown(e, track.id, clip, 'right')}
+                                title="Drag to trim end"
+                              >
+                                <div className="w-full h-full rounded-r opacity-0 group-hover:opacity-100 transition-opacity"
+                                  style={{ backgroundColor: `${color}66` }}
+                                />
+                              </div>
+
+                              {/* Clip duration label */}
+                              <div
+                                className="absolute bottom-0.5 right-2 text-[8px] font-mono opacity-50 pointer-events-none"
+                                style={{ color }}
+                              >
+                                {clip.durationSec.toFixed(1)}s
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : !isDrumTrack ? (
+                      /* ---- Empty non-drum track ---- */
+                      <div
+                        className="w-full h-full flex items-center justify-center text-zinc-700 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          const x = e.clientX - rect.left;
+                          const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                          onSelectClip(null);
+                          onSeek(sec);
+                        }}
+                      >
+                        Empty — record to add clips
+                      </div>
                     ) : (
+                      /* ---- Empty drum track ---- */
                       <div className="w-full h-full flex items-center justify-center text-zinc-700 text-xs">
-                        No audio
+                        Upload a drum loop
                       </div>
                     )}
                   </Track>
