@@ -292,13 +292,13 @@ export const ProjectsPage: React.FC = () => {
     <div className="h-screen w-screen bg-zinc-950 text-zinc-200 overflow-hidden relative">
       <div className="h-full w-full p-8 flex gap-8">
         {/* Sidebar */}
-        <div className="w-64 flex-shrink-0 flex flex-col gap-4">
+        <div className="w-64 flex-shrink-0 flex flex-col gap-4 h-full">
           {/* Logo and Sign Out - same line */}
-          <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center justify-between gap-3 mb-2 flex-shrink-0">
             <img 
               src={sinatraLogo} 
               alt="Sinatra" 
-              className="h-8 object-contain"
+              className="h-12 object-contain"
             />
             <button
               onClick={() => signOut()}
@@ -308,9 +308,9 @@ export const ProjectsPage: React.FC = () => {
               <span>Sign Out</span>
             </button>
           </div>
-          <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-2xl p-6 backdrop-blur-sm">
+          <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-2xl p-6 backdrop-blur-sm flex-1 flex flex-col min-h-0 overflow-hidden">
             {/* Search */}
-            <div className="mb-6">
+            <div className="mb-6 flex-shrink-0">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
                 <Input
@@ -324,7 +324,7 @@ export const ProjectsPage: React.FC = () => {
             </div>
 
             {/* Stats */}
-            <div className="mb-6 space-y-3">
+            <div className="mb-6 space-y-3 flex-shrink-0">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-zinc-500">Total Projects</span>
                 <span className="text-zinc-300 font-medium">{totalProjects}</span>
@@ -335,68 +335,64 @@ export const ProjectsPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Sort */}
-            <div className="mb-6">
-              <Label className="text-xs text-zinc-400 mb-2 block">Sort By</Label>
-              <div className="space-y-1.5">
-                {(['recent', 'name', 'oldest'] as const).map((option) => (
-                  <button
-                    key={option}
-                    onClick={() => setSortBy(option)}
-                    className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors ${
-                      sortBy === option
-                        ? 'bg-zinc-800 text-zinc-200'
-                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
-                    }`}
-                  >
-                    {option === 'recent' && 'Most Recent'}
-                    {option === 'name' && 'Name (A-Z)'}
-                    {option === 'oldest' && 'Oldest First'}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Genre Filter */}
-            {genres.length > 0 && (
-              <div>
-                <Label className="text-xs text-zinc-400 mb-2 block flex items-center gap-1.5">
-                  <Filter size={12} />
-                  Genre
-                </Label>
-                <div className="space-y-1.5">
-                  <button
-                    onClick={() => setSelectedGenre(null)}
-                    className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors ${
-                      !selectedGenre
-                        ? 'bg-zinc-800 text-zinc-200'
-                        : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
-                    }`}
-                  >
-                    All Genres
-                  </button>
-                  {genres.map((genre) => (
+            {/* Sort and Genre Container */}
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+              {/* Sort */}
+              <div className="mb-6 flex-shrink-0">
+                <Label className="text-xs text-zinc-400 mb-2 block">Sort By</Label>
+                <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-2 space-y-1.5">
+                  {(['recent', 'name', 'oldest'] as const).map((option) => (
                     <button
-                      key={genre}
-                      onClick={() => setSelectedGenre(genre === selectedGenre ? null : genre)}
+                      key={option}
+                      onClick={() => setSortBy(option)}
                       className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors ${
-                        selectedGenre === genre
+                        sortBy === option
                           ? 'bg-zinc-800 text-zinc-200'
                           : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
                       }`}
                     >
-                      {genre}
+                      {option === 'recent' && 'Most Recent'}
+                      {option === 'name' && 'Name (A-Z)'}
+                      {option === 'oldest' && 'Oldest First'}
                     </button>
                   ))}
                 </div>
               </div>
-            )}
-          </div>
 
-          {/* Cat Container */}
-          <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-2xl p-6 backdrop-blur-sm flex-shrink-0">
-            <div className="flex flex-col items-center justify-center">
-              <div className="text-6xl mb-2">🐱</div>
+              {/* Genre Filter */}
+              {genres.length > 0 && (
+                <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                  <Label className="text-xs text-zinc-400 mb-2 block flex items-center gap-1.5 flex-shrink-0">
+                    <Filter size={12} />
+                    Genre
+                  </Label>
+                  <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-2 space-y-1.5 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                    <button
+                      onClick={() => setSelectedGenre(null)}
+                      className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors flex-shrink-0 ${
+                        !selectedGenre
+                          ? 'bg-zinc-800 text-zinc-200'
+                          : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
+                      }`}
+                    >
+                      All Genres
+                    </button>
+                    {genres.map((genre) => (
+                      <button
+                        key={genre}
+                        onClick={() => setSelectedGenre(genre === selectedGenre ? null : genre)}
+                        className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors flex-shrink-0 ${
+                          selectedGenre === genre
+                            ? 'bg-zinc-800 text-zinc-200'
+                            : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-900/50'
+                        }`}
+                      >
+                        {genre}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -506,8 +502,10 @@ export const ProjectsPage: React.FC = () => {
         <div className="flex-[0.35] flex-shrink-0">
           <Card className="w-full h-full flex flex-col bg-zinc-900/50 border-zinc-800/50 backdrop-blur-sm">
             <CardHeader className="pb-4">
-              <CardTitle className="text-xl">Create project</CardTitle>
-              <CardDescription className="text-xs text-zinc-500">Start a new composition</CardDescription>
+              <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
+                <span className="font-light text-zinc-100 tracking-tighter">Create</span>
+              </h1>
+              <p className="text-zinc-500 mt-1.5 text-sm">Start a new composition</p>
             </CardHeader>
             <CardContent className="flex-1">
               <form className="space-y-4">

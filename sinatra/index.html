@@ -56,6 +56,25 @@
         background: #3f3f46; 
       }
       
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 6px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #18181b;
+        border-radius: 3px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #3f3f46;
+        border-radius: 3px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #52525b;
+      }
+      .custom-scrollbar {
+        scrollbar-width: thin;
+        scrollbar-color: #3f3f46 #18181b;
+      }
+      
       /* Style select dropdown options to match dark theme */
       select {
         color-scheme: dark;
