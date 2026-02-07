@@ -193,6 +193,16 @@ export const Track: React.FC<TrackProps> = ({
             </button>
             <span className="text-[10px] font-mono text-zinc-500">{Math.round(track.volume * 100)}</span>
           </div>
+          <input
+            type="range"
+            min="0"
+            max="1"
+            step="0.01"
+            value={track.volume}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
+            className="w-full h-0.5 bg-zinc-800 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-zinc-500 [&::-webkit-slider-thumb]:rounded-sm [&::-moz-range-thumb]:w-2 [&::-moz-range-thumb]:h-2 [&::-moz-range-thumb]:bg-zinc-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-sm"
+          />
           {onDelete && (
             <>
               <button
@@ -218,16 +228,6 @@ export const Track: React.FC<TrackProps> = ({
               )}
             </>
           )}
-          <input
-            type="range"
-            min="0"
-            max="1"
-            step="0.01"
-            value={track.volume}
-            onClick={(e) => e.stopPropagation()}
-            onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-            className="w-full h-0.5 bg-zinc-800 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-zinc-500 [&::-webkit-slider-thumb]:rounded-sm [&::-moz-range-thumb]:w-2 [&::-moz-range-thumb]:h-2 [&::-moz-range-thumb]:bg-zinc-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-sm"
-          />
         </div>
       </div>
 
