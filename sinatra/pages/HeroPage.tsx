@@ -89,7 +89,7 @@ const HeroHeader: React.FC = () => {
                 to="/"
                 aria-label="home"
                 className="flex items-center space-x-2">
-                <img src={sinatraLogo} alt="SINATRA" className="h-6 w-auto" />
+                <img src={sinatraLogo} alt="SINATRA" className="h-12 object-contain" />
               </Link>
 
               <button
@@ -209,7 +209,7 @@ const ArtistsCarousel: React.FC = () => {
 
     return (
       <div className="w-full pt-20 pb-16 lg:pt-40 lg:pb-24">
-        <div className="container mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-7xl px-6">
         <div className="flex flex-col gap-10">
           <h2 className="text-xl md:text-3xl lg:text-5xl tracking-tighter lg:max-w-xl font-light text-left text-slate-900">
             Trusted by thousands of artists worldwide.
@@ -376,7 +376,7 @@ export const HeroPage: React.FC = () => {
           {/* Features Section */}
           <Feature72
             heading="Powerful Features"
-            description="Discover the powerful features that make Sinatra the perfect tool for music production. Built with modern technology and designed for creative workflows."
+            description="Discover the features that make Sinatra the perfect tool for music production."
             linkUrl="#"
             linkText="Explore features"
             features={[
@@ -410,7 +410,7 @@ export const HeroPage: React.FC = () => {
               <img 
                 src={sinatraLogo} 
                 alt="SINATRA" 
-                className="h-6 w-auto" 
+                className="h-12 object-contain" 
               />
             }
             brandName="Sinatra"
