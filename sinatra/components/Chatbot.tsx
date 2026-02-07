@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Send, Bot, User } from 'lucide-react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
 
 interface Message {
   id: string;
@@ -14,7 +13,43 @@ interface ChatbotProps {
   onWidthChange?: (width: number) => void;
 }
 
-const GEMINI_API_KEY = 'AIzaSyBnXRD-k7bFaZbpzPeShRSMKnmwMWqmUxw';
+// OpenRouter API configuration
+const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
+const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-pro'; // Default to Gemini via OpenRouter
+
+// Lazy load OpenRouter SDK to prevent app crash if SDK is not available
+let OpenRouterSDK: any = null;
+let openRouterClient: any = null;
+
+const getOpenRouterClient = async () => {
+  if (!OPENROUTER_API_KEY) {
+    return null;
+  }
+  
+  if (openRouterClient) {
+    return openRouterClient;
+  }
+
+  try {
+    // Dynamically import OpenRouter SDK
+    if (!OpenRouterSDK) {
+      OpenRouterSDK = (await import('@openrouter/sdk')).default;
+    }
+    
+    openRouterClient = new OpenRouterSDK({
+      apiKey: OPENROUTER_API_KEY,
+      defaultHeaders: {
+        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
+        'X-Title': 'Sinatra Music App',
+      },
+    });
+    
+    return openRouterClient;
+  } catch (error) {
+    console.error('Failed to initialize OpenRouter SDK:', error);
+    return null;
+  }
+};
 
 export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -32,13 +67,6 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
   const resizeRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isResizingRef = useRef(false);
-  const genAI = useRef<GoogleGenerativeAI | null>(null);
-  const chatRef = useRef<any>(null);
-
-  // Initialize Gemini AI
-  useEffect(() => {
-    genAI.current = new GoogleGenerativeAI(GEMINI_API_KEY);
-  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -79,7 +107,19 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
   };
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading || !genAI.current) return;
+    if (!input.trim() || isLoading) return;
+
+    // Check if OpenRouter API key is configured
+    if (!OPENROUTER_API_KEY) {
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'OpenRouter API key not configured. Please set VITE_OPENROUTER_API_KEY in your .env file.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorMessage]);
+      return;
+    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -100,34 +140,31 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
     });
 
     try {
-      // Initialize chat if needed
-      if (!chatRef.current) {
-        // Use gemini-pro (most widely available and stable)
-        const model = genAI.current.getGenerativeModel({ model: 'gemini-pro' });
-        
-        // Get history excluding initial greeting and the user message we just added
-        const historyMessages = updatedMessages
-          .filter(m => (m.role !== 'assistant' || m.id !== '1') && m.id !== userMessage.id)
-          .map(m => ({
-            role: m.role === 'user' ? 'user' : 'model',
-            parts: [{ text: m.content }],
-          }));
-        
-        chatRef.current = model.startChat({
-          history: historyMessages.length > 0 ? historyMessages : undefined,
-          generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 1024,
-          },
-        });
+      // Get OpenRouter client (lazy loaded)
+      const openRouter = await getOpenRouterClient();
+      
+      if (!openRouter) {
+        throw new Error('Failed to initialize OpenRouter client. Please check your API key and ensure @openrouter/sdk is installed.');
       }
 
-      // Send message and get response
-      const result = await chatRef.current.sendMessage(userInput);
-      const response = await result.response;
-      const text = response.text();
+      // Convert messages to OpenRouter format (exclude initial greeting)
+      const conversationMessages = updatedMessages
+        .filter(m => m.id !== '1') // Exclude initial greeting
+        .map(m => ({
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.content,
+        }));
+
+      // Call OpenRouter API using SDK
+      const completion = await openRouter.chat.send({
+        model: OPENROUTER_MODEL,
+        messages: conversationMessages,
+        stream: false,
+        temperature: 0.7,
+        max_tokens: 1024,
+      });
+
+      const text = completion.choices[0]?.message?.content || 'No response generated.';
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -138,19 +175,23 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error: any) {
-      console.error('Error calling Gemini API:', error);
+      console.error('Error calling OpenRouter API:', error);
       const errorDetails = error?.message || error?.toString() || 'Unknown error';
       console.error('Error details:', errorDetails);
       console.error('Full error object:', error);
       
       // Check for common API errors
       let userFriendlyMessage = 'Sorry, I encountered an error processing your request.';
-      if (errorDetails.includes('API_KEY') || errorDetails.includes('API key')) {
-        userFriendlyMessage = 'API key error. Please check your Gemini API key configuration.';
-      } else if (errorDetails.includes('quota') || errorDetails.includes('limit')) {
-        userFriendlyMessage = 'API quota exceeded. Please check your Gemini API usage limits.';
-      } else if (errorDetails.includes('permission') || errorDetails.includes('access')) {
+      if (errorDetails.includes('API') || errorDetails.includes('key') || errorDetails.includes('401')) {
+        userFriendlyMessage = 'API key error. Please check your OpenRouter API key configuration.';
+      } else if (errorDetails.includes('quota') || errorDetails.includes('limit') || errorDetails.includes('429')) {
+        userFriendlyMessage = 'API quota exceeded. Please check your OpenRouter usage limits.';
+      } else if (errorDetails.includes('permission') || errorDetails.includes('access') || errorDetails.includes('403')) {
         userFriendlyMessage = 'Permission denied. Please check your API key permissions.';
+      } else if (errorDetails.includes('model')) {
+        userFriendlyMessage = 'Model error. Please check your OpenRouter model configuration.';
+      } else if (errorDetails.includes('Failed to initialize') || errorDetails.includes('import')) {
+        userFriendlyMessage = 'OpenRouter SDK not available. Please run: npm install @openrouter/sdk';
       }
       
       const errorMessage: Message = {
