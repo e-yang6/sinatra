@@ -163,7 +163,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
     const userMessage: Message = {
       id: Date.now().toString(),
       role: 'user',
-      content: `🎤 ${text.trim()}`,
+      content: text.trim(),
       timestamp: new Date(),
     };
 
@@ -520,7 +520,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
             </button>
           </div>
           <div className="text-[10px] text-zinc-600 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line • Click 🎤 for hands-free voice
+            Press Enter to send, Shift+Enter for new line • Click mic for hands-free voice
           </div>
         </div>
       </div>

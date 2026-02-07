@@ -148,16 +148,52 @@ export async function processAll(
   };
 }
 
+// ==================== CHORD GENERATION API ====================
+
+export interface GenerateChordsRequest {
+  chords: string[];
+  bpm: number;
+  beats_per_chord?: number;
+  instrument?: string;
+  octave_shift?: number;
+  velocity?: number;
+  pattern?: 'block' | 'arpeggiated';
+}
+
+/**
+ * Generate a chord progression and get rendered audio back
+ */
+export async function generateChords(request: GenerateChordsRequest): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/generate-chords`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Chord generation failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
+
 // ==================== CHAT API ====================
 
 export interface ChatAction {
-  type: 'ADD_TRACK' | 'SET_BPM' | 'CHANGE_INSTRUMENT' | 'TRANSPORT' | 'SET_KEY' | 'SET_SCALE' | 'SET_QUANTIZE';
+  type: 'ADD_TRACK' | 'SET_BPM' | 'CHANGE_INSTRUMENT' | 'TRANSPORT' | 'SET_KEY' | 'SET_SCALE' | 'SET_QUANTIZE' | 'GENERATE_CHORDS';
   instrument?: string;
   value?: number;
   command?: string;
   key?: string;
   scale?: string;
   quantize?: string;
+  // Chord generation fields
+  chords?: string[];
+  beats_per_chord?: number;
+  pattern?: 'block' | 'arpeggiated';
+  octave_shift?: number;
+  velocity?: number;
 }
 
 export interface ChatResponse {

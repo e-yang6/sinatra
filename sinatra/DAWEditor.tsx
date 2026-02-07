@@ -5,7 +5,7 @@ import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
 import { Chatbot } from './components/Chatbot';
 import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
-import { uploadDrum, uploadVocal, renderMidi, uploadSample, ChatAction, ProjectContext } from './api';
+import { uploadDrum, uploadVocal, renderMidi, uploadSample, generateChords, ChatAction, ProjectContext } from './api';
 
 // ---- WAV encoding utility ----
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -1184,8 +1184,77 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         }
         break;
       }
+      case 'GENERATE_CHORDS': {
+        if (action.chords && action.chords.length > 0) {
+          // Run async chord generation
+          (async () => {
+            try {
+              const instrument = action.instrument || 'Piano';
+              setStatusMessage(`Generating ${action.chords!.join(' → ')} on ${instrument}...`);
+              setIsProcessing(true);
+
+              // Create a new track for the chords
+              const newId = addTrack();
+              setTracks(prev => prev.map(t =>
+                t.id === newId ? { ...t, instrument: instrument as InstrumentType, name: `${instrument} Chords (Track ${newId})` } : t
+              ));
+
+              // Call backend to generate chord audio
+              const audioBlob = await generateChords({
+                chords: action.chords!,
+                bpm,
+                beats_per_chord: action.beats_per_chord || 4,
+                instrument,
+                octave_shift: action.octave_shift || 0,
+                velocity: action.velocity || 80,
+                pattern: action.pattern || 'block',
+              });
+
+              console.log(`[Sinatra] Chord audio received: ${audioBlob.size} bytes`);
+              const audioUrl = URL.createObjectURL(audioBlob);
+
+              // Get audio duration
+              const tempAudio = new Audio(audioUrl);
+              await new Promise<void>((resolve) => {
+                tempAudio.onloadedmetadata = () => resolve();
+                tempAudio.onerror = () => resolve();
+              });
+              const duration = tempAudio.duration || (action.chords!.length * (action.beats_per_chord || 4) * 60 / bpm);
+
+              // Create a clip on the new track
+              const clipId = `clip-chord-${Date.now()}-${nextClipIdRef.current++}`;
+              const newClip: Clip = {
+                id: clipId,
+                startSec: 0,
+                durationSec: duration,
+                audioUrl,
+                offsetSec: 0,
+                originalDurationSec: duration,
+              };
+
+              setTracks(prev => prev.map(t =>
+                t.id === newId ? { ...t, clips: [...(t.clips || []), newClip] } : t
+              ));
+
+              // Register audio element for playback
+              const audioEl = new Audio(audioUrl);
+              clipAudioMapRef.current.set(clipId, audioEl);
+
+              setStatusMessage(`Chords ready on Track ${newId}!`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Chord generation failed';
+              console.error('[Sinatra] Chord generation error:', msg);
+              setError(msg);
+              setStatusMessage('Error');
+            } finally {
+              setIsProcessing(false);
+            }
+          })();
+        }
+        break;
+      }
     }
-  }, [addTrack, handleInstrumentChange, handlePlayToggle, handleStop, handleRecordToggle, isPlaying, isRecording, setMusicalKey, setScaleType, setQuantize]);
+  }, [addTrack, handleInstrumentChange, handlePlayToggle, handleStop, handleRecordToggle, isPlaying, isRecording, setMusicalKey, setScaleType, setQuantize, bpm]);
 
   // Calculate project stats
   const totalDuration = Math.max(

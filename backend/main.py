@@ -30,6 +30,7 @@ from services.transcription import vocal_to_midi
 from services.synth import render_midi_to_wav
 from services.chat import chat as gemini_chat, clear_history as clear_chat_history
 from services.sampler import detect_base_pitch, render_with_sample
+from services.chords import generate_chord_progression
 from utils.file_helpers import save_upload, validate_wav, cleanup_file, UPLOAD_DIR
 
 # Verify Basic Pitch is available at startup
@@ -340,6 +341,55 @@ async def download_midi():
         media_type="audio/midi",
         filename="sinatra_vocal.mid",
     )
+
+
+# ==================== CHORD GENERATION ====================
+
+
+class ChordRequest(BaseModel):
+    chords: list[str]             # e.g. ["C", "Am", "F", "G7"]
+    bpm: float = 120.0
+    beats_per_chord: int = 4
+    instrument: str = "Piano"
+    octave_shift: int = 0         # -2 to +2
+    velocity: int = 80            # 1-127
+    pattern: str = "block"        # "block" or "arpeggiated"
+
+
+@app.post("/generate-chords")
+async def generate_chords_endpoint(request: ChordRequest):
+    """
+    Generate a chord progression as rendered audio.
+    Returns the WAV file directly.
+    """
+    if not request.chords:
+        raise HTTPException(status_code=400, detail="No chords provided.")
+
+    # Validate
+    if request.bpm < 40 or request.bpm > 300:
+        raise HTTPException(status_code=400, detail="BPM must be between 40 and 300.")
+    if request.beats_per_chord < 1 or request.beats_per_chord > 16:
+        raise HTTPException(status_code=400, detail="beats_per_chord must be between 1 and 16.")
+    if len(request.chords) > 64:
+        raise HTTPException(status_code=400, detail="Maximum 64 chords per progression.")
+
+    try:
+        wav_path = generate_chord_progression(
+            chords=request.chords,
+            bpm=request.bpm,
+            beats_per_chord=request.beats_per_chord,
+            instrument=request.instrument,
+            octave_shift=request.octave_shift,
+            velocity=request.velocity,
+            pattern=request.pattern,
+        )
+        return FileResponse(
+            wav_path,
+            media_type="audio/wav",
+            filename="sinatra_chords.wav",
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # ==================== CHAT ENDPOINTS ====================
