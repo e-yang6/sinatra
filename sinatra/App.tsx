@@ -3,7 +3,7 @@ import { Header } from './components/Header';
 import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
-import { InstrumentType, TrackData, Note } from './types';
+import { InstrumentType, TrackData, Note, Clip } from './types';
 import { uploadDrum, uploadVocal, renderMidi } from './api';
 
 // ---- WAV encoding utility ----
@@ -67,17 +67,18 @@ const App: React.FC = () => {
   const [tracks, setTracks] = useState<TrackData[]>(INITIAL_TRACKS);
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState<string>('1');
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
 
   // ---- Backend state ----
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [error, setError] = useState<string | null>(null);
-  
+
   // ---- Audio visualization state ----
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  
+
   // ---- Terminal state ----
   const [terminalHeight, setTerminalHeight] = useState(220);
   const [recordingSessions, setRecordingSessions] = useState<Array<{
@@ -96,10 +97,10 @@ const App: React.FC = () => {
   // ---- Master volume state ----
   const [masterVolume, setMasterVolume] = useState(1.0);
 
-  // Apply master volume to all audio elements
+  // Apply master volume to all clip audio elements and drum
   useEffect(() => {
-    trackAudioMapRef.current.forEach((el, trackId) => {
-      const track = tracks.find(t => t.id === trackId);
+    clipAudioMapRef.current.forEach((el, clipId) => {
+      const track = tracks.find(t => t.clips?.some(c => c.id === clipId));
       if (track) {
         el.volume = track.volume * masterVolume;
       }
@@ -113,7 +114,8 @@ const App: React.FC = () => {
   }, [masterVolume, tracks]);
 
   // ---- Audio for playback ----
-  const trackAudioMapRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const clipAudioMapRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const clipTimeoutsRef = useRef<number[]>([]);
   const drumAudioUrlRef = useRef<string | null>(null);
   const drumAudioElRef = useRef<HTMLAudioElement | null>(null);
 
@@ -123,9 +125,11 @@ const App: React.FC = () => {
   const recorderNodeRef = useRef<ScriptProcessorNode | null>(null);
   const recordedChunksRef = useRef<Float32Array[]>([]);
   const recordingTargetRef = useRef<{ trackId: string; instrument: InstrumentType } | null>(null);
+  const recordingStartSecRef = useRef<number>(0);
 
-  // ---- Track ID counter ----
+  // ---- ID counters ----
   const nextTrackIdRef = useRef(2);
+  const nextClipIdRef = useRef(1);
 
   // ---- Transport refs ----
   const transportStartRef = useRef(0);
@@ -154,6 +158,7 @@ const App: React.FC = () => {
       isSolo: false,
       instrument: InstrumentType.PIANO,
       color: colors[colorIndex],
+      clips: [],
     };
     setTracks(prev => [...prev, newTrack]);
     setSelectedTrackId(id);
@@ -195,15 +200,11 @@ const App: React.FC = () => {
   //  METRONOME
   // ==================================
   const startMetronome = useCallback((ctx: AudioContext, currentBpm: number) => {
-    // Stop any existing metronome first
     clearInterval(metronomeTimerRef.current);
-    
-    const beatSec = 60 / currentBpm;
     let beat = 0;
     nextBeatRef.current = ctx.currentTime;
 
     const scheduler = () => {
-      // Recalculate beatSec in case BPM changed
       const currentBeatSec = 60 / bpm;
       while (nextBeatRef.current < ctx.currentTime + 0.1) {
         scheduleClick(ctx, nextBeatRef.current, beat % BEATS_PER_BAR === 0);
@@ -228,19 +229,17 @@ const App: React.FC = () => {
     const el = drumAudioElRef.current;
     el.src = drumAudioUrlRef.current;
     el.loop = true;
-    // Set volume from track state
     const drumTrack = tracks.find(t => t.id === '1');
     if (drumTrack) {
       el.volume = drumTrack.volume * masterVolume;
     }
-    // Seek within the loop
     if (el.duration) {
       el.currentTime = fromSec % el.duration;
     } else {
       el.currentTime = 0;
     }
     el.play().catch(() => {});
-  }, [tracks]);
+  }, [tracks, masterVolume]);
 
   const stopDrumPlayback = useCallback(() => {
     if (drumAudioElRef.current) {
@@ -250,13 +249,75 @@ const App: React.FC = () => {
   }, []);
 
   // ==================================
+  //  CLIP PLAYBACK SCHEDULING
+  // ==================================
+  const scheduleClipPlayback = useCallback((fromSec: number, excludeTrackId?: string) => {
+    // Clear existing timeouts
+    clipTimeoutsRef.current.forEach(clearTimeout);
+    clipTimeoutsRef.current = [];
+
+    // Pause all clip audio
+    clipAudioMapRef.current.forEach(el => el.pause());
+
+    tracks.forEach(track => {
+      if (track.id === '1' || track.isMuted || !track.clips) return;
+      if (excludeTrackId && track.id === excludeTrackId) return;
+
+      track.clips.forEach(clip => {
+        const el = clipAudioMapRef.current.get(clip.id);
+        if (!el) return;
+
+        el.volume = track.volume * masterVolume;
+        const clipEnd = clip.startSec + clip.durationSec;
+        const audioOffset = clip.offsetSec || 0;
+
+        if (fromSec >= clip.startSec && fromSec < clipEnd) {
+          // Playhead is inside clip — play from correct audio position
+          el.currentTime = audioOffset + (fromSec - clip.startSec);
+          el.play().catch(() => {});
+          // Schedule stop at clip's trimmed end
+          const remainingDuration = clipEnd - fromSec;
+          const stopTid = window.setTimeout(() => { el.pause(); }, remainingDuration * 1000);
+          clipTimeoutsRef.current.push(stopTid);
+        } else if (fromSec < clip.startSec) {
+          // Clip is ahead — schedule it
+          const delayMs = (clip.startSec - fromSec) * 1000;
+          const tid = window.setTimeout(() => {
+            el.currentTime = audioOffset;
+            el.play().catch(() => {});
+            // Schedule stop at clip's trimmed end
+            const stopTid = window.setTimeout(() => { el.pause(); }, clip.durationSec * 1000);
+            clipTimeoutsRef.current.push(stopTid);
+          }, delayMs);
+          clipTimeoutsRef.current.push(tid);
+        }
+      });
+    });
+  }, [tracks, masterVolume]);
+
+  const stopClipPlayback = useCallback(() => {
+    clipTimeoutsRef.current.forEach(clearTimeout);
+    clipTimeoutsRef.current = [];
+    clipAudioMapRef.current.forEach(el => {
+      el.pause();
+      el.currentTime = 0;
+    });
+  }, []);
+
+  const pauseClipPlayback = useCallback(() => {
+    clipTimeoutsRef.current.forEach(clearTimeout);
+    clipTimeoutsRef.current = [];
+    clipAudioMapRef.current.forEach(el => el.pause());
+  }, []);
+
+  // ==================================
   //  SEEK — jump to any point
   // ==================================
   const handleSeek = (sec: number) => {
     setPlayheadSec(sec);
+    setSelectedClipId(null); // Deselect clip on seek
 
     if (isPlaying) {
-      // Restart transport from new position
       playheadStartSecRef.current = sec;
       transportStartRef.current = performance.now();
 
@@ -265,17 +326,8 @@ const App: React.FC = () => {
         drumAudioElRef.current.currentTime = sec % drumAudioElRef.current.duration;
       }
 
-      // Seek all other tracks
-      trackAudioMapRef.current.forEach((el) => {
-        if (el.duration) {
-          if (sec < el.duration) {
-            el.currentTime = sec;
-            if (el.paused) el.play().catch(() => {});
-          } else {
-            el.pause();
-          }
-        }
-      });
+      // Re-schedule clips from new position
+      scheduleClipPlayback(sec);
     }
   };
 
@@ -295,6 +347,10 @@ const App: React.FC = () => {
         instrument = InstrumentType.PIANO;
       }
       recordingTargetRef.current = { trackId: targetId, instrument };
+
+      // Save recording start position (record from wherever the marker is)
+      const recordStartSec = playheadSec;
+      recordingStartSecRef.current = recordStartSec;
 
       // Create AudioContext NOW (inside the click gesture) so it won't be suspended
       const ctx = new AudioContext();
@@ -344,7 +400,7 @@ const App: React.FC = () => {
         recordedChunksRef.current.push(gated);
       };
 
-      // Connect audio nodes: source -> analyser -> filters -> processor -> destination
+      // Connect audio nodes
       source.connect(analyser);
       analyser.connect(highpass);
       highpass.connect(lowpass);
@@ -353,31 +409,25 @@ const App: React.FC = () => {
 
       // Create new recording session
       const sessionId = Date.now().toString();
-      const sessionStartTime = new Date();
       setRecordingSessions(prev => [...prev, {
         id: sessionId,
-        startTime: sessionStartTime,
+        startTime: new Date(),
         status: 'in_progress',
         message: 'Recording started',
       }]);
 
-      // Start audio level visualization with better frequency analysis
+      // Start audio level visualization
       const frequencyData = new Uint8Array(analyser.frequencyBinCount);
       const waveformData = new Uint8Array(analyser.fftSize);
       const isRecordingRef = { current: true };
-      
+
       const updateLevels = () => {
         if (!analyserRef.current || !isRecordingRef.current) {
           animationFrameRef.current = null;
           return;
         }
-        
-        // Get frequency data
         analyserRef.current.getByteFrequencyData(frequencyData);
-        // Get waveform data for more accurate visualization
         analyserRef.current.getByteTimeDomainData(waveformData);
-        
-        // Calculate peak and average levels
         let peak = 0;
         let sum = 0;
         for (let i = 0; i < waveformData.length; i++) {
@@ -385,81 +435,52 @@ const App: React.FC = () => {
           peak = Math.max(peak, normalized);
           sum += normalized;
         }
-        const avg = sum / waveformData.length;
         setCurrentPeakLevel(peak);
-        setCurrentAvgLevel(avg);
-        
-        // Use logarithmic scaling for better frequency representation
-        // Map frequencies more accurately (lower frequencies get more bars)
+        setCurrentAvgLevel(sum / waveformData.length);
         const numBars = 60;
         const levels: number[] = [];
-        
         for (let i = 0; i < numBars; i++) {
-          // Logarithmic mapping for better frequency distribution
           const logIndex = Math.pow(i / numBars, 1.5) * frequencyData.length;
           const index = Math.floor(logIndex);
           const nextIndex = Math.min(index + 1, frequencyData.length - 1);
-          
-          // Interpolate between adjacent bins for smoother visualization
-          const value = frequencyData[index];
-          const nextValue = frequencyData[nextIndex];
-          const interpolated = value + (nextValue - value) * (logIndex - index);
-          
-          // Normalize and apply smoothing
-          const normalized = Math.min(1, interpolated / 255);
-          levels.push(normalized);
+          const interpolated = frequencyData[index] + (frequencyData[nextIndex] - frequencyData[index]) * (logIndex - index);
+          levels.push(Math.min(1, interpolated / 255));
         }
-        
         setAudioLevels(levels);
         animationFrameRef.current = requestAnimationFrame(updateLevels);
       };
       updateLevels();
-      
-      // Store ref for cleanup
       (recordingTargetRef.current as any).isRecordingRef = isRecordingRef;
 
-      // Recording always starts from 0
-      setPlayheadSec(0);
+      // Start from current playhead position (NOT always 0)
       setIsRecording(true);
       setNotes([]);
-      startTransport(0);
-      
-      // Start drum playback only if not muted
+      startTransport(recordStartSec);
+
+      // Start drum playback from position
       const drumTrack = tracks.find(t => t.id === '1');
       if (drumTrack && !drumTrack.isMuted) {
-        startDrumPlayback(0);
+        startDrumPlayback(recordStartSec);
       }
-      
+
       if (metronome) startMetronome(ctx, bpm);
 
-      // Play back all other recorded tracks from 0
-      tracks.forEach(track => {
-        if (track.id === '1') return;
-        if (track.id === targetId) return;
-        if (track.isMuted) return;
-        const el = trackAudioMapRef.current.get(track.id);
-        if (el?.src) {
-          el.currentTime = 0;
-          el.volume = track.volume;
-          el.play().catch(() => {});
-        }
-      });
+      // Play other tracks' clips from position
+      scheduleClipPlayback(recordStartSec, targetId);
 
-      console.log('[Sinatra] Recording started on track', targetId, 'with', instrument);
+      console.log('[Sinatra] Recording started on track', targetId, 'at', recordStartSec.toFixed(1), 's');
       setStatusMessage(`Recording on Track ${targetId} (${instrument})...`);
     } catch (err: any) {
       console.error('[Sinatra] Mic error:', err);
       setError(err?.message || 'Could not access microphone');
       setStatusMessage('Error');
-      
-      // Update the latest session if it exists to mark it as error
       setRecordingSessions(prev => {
         const updated = [...prev];
-        const latestSession = updated[updated.length - 1];
-        if (latestSession && latestSession.status === 'in_progress') {
-          latestSession.status = 'error';
-          latestSession.message = err?.message || 'Could not access microphone';
-          latestSession.endTime = new Date();
+        const latest = updated[updated.length - 1];
+        if (latest?.status === 'in_progress') {
+          latest.status = 'error';
+          latest.message = err?.message || 'Could not access microphone';
+          latest.endTime = new Date();
         }
         return updated;
       });
@@ -485,11 +506,8 @@ const App: React.FC = () => {
     setCurrentPeakLevel(0);
     setCurrentAvgLevel(0);
 
-    // Stop all other tracks
-    trackAudioMapRef.current.forEach(el => {
-      el.pause();
-      el.currentTime = 0;
-    });
+    // Stop all clips
+    stopClipPlayback();
 
     recorderNodeRef.current?.disconnect();
     mediaStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -499,38 +517,25 @@ const App: React.FC = () => {
     audioCtxRef.current?.close();
 
     const chunks = recordedChunksRef.current;
-    console.log(`[Sinatra] Recording stopped. ${chunks.length} chunks captured at ${sampleRate}Hz`);
+    console.log(`[Sinatra] Recording stopped. ${chunks.length} chunks at ${sampleRate}Hz`);
 
-    // Update the latest recording session
+    // Update recording session
     setRecordingSessions(prev => {
       const updated = [...prev];
-      const latestSession = updated[updated.length - 1];
-      if (latestSession && latestSession.status === 'in_progress') {
+      const latest = updated[updated.length - 1];
+      if (latest?.status === 'in_progress') {
         const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
         const totalSeconds = totalLength / sampleRate;
-        const merged = new Float32Array(totalLength);
-        let offset = 0;
-        for (const chunk of chunks) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-        const maxAmp = merged.reduce((max, s) => Math.max(max, Math.abs(s)), 0);
-        
-        latestSession.endTime = endTime;
-        latestSession.duration = totalSeconds;
-        latestSession.sampleRate = sampleRate;
-        latestSession.peakAmplitude = maxAmp;
-        
-        if (chunks.length === 0) {
-          latestSession.status = 'error';
-          latestSession.message = 'No audio captured';
-        } else if (maxAmp < 0.001) {
-          latestSession.status = 'error';
-          latestSession.message = 'Recording was silent';
-        } else {
-          latestSession.status = 'success';
-          latestSession.message = `Captured ${totalSeconds.toFixed(1)}s`;
-        }
+        const tempMerged = new Float32Array(totalLength);
+        let off = 0;
+        for (const chunk of chunks) { tempMerged.set(chunk, off); off += chunk.length; }
+        const maxAmp = tempMerged.reduce((max, s) => Math.max(max, Math.abs(s)), 0);
+        latest.endTime = endTime;
+        latest.duration = totalSeconds;
+        latest.sampleRate = sampleRate;
+        latest.peakAmplitude = maxAmp;
+        latest.status = chunks.length === 0 ? 'error' : maxAmp < 0.001 ? 'error' : 'success';
+        latest.message = chunks.length === 0 ? 'No audio captured' : maxAmp < 0.001 ? 'Recording was silent' : `Captured ${totalSeconds.toFixed(1)}s`;
       }
       return updated;
     });
@@ -560,15 +565,14 @@ const App: React.FC = () => {
       return;
     }
 
-    // Normalize audio to a reasonable level (target peak at 0.8 to avoid clipping)
-    // This boosts quiet recordings significantly
+    // Normalize audio
     const targetPeak = 0.8;
     const gain = maxAmp > 0 ? targetPeak / maxAmp : 1.0;
     const normalized = new Float32Array(merged.length);
     for (let i = 0; i < merged.length; i++) {
       normalized[i] = merged[i] * gain;
     }
-    console.log(`[Sinatra] Applied gain: ${gain.toFixed(2)}x (peak: ${maxAmp.toFixed(4)} → ${targetPeak})`);
+    console.log(`[Sinatra] Applied gain: ${gain.toFixed(2)}x`);
 
     const wavBlob = encodeWav(normalized, sampleRate);
     const wavFile = new File([wavBlob], 'recording.wav', { type: 'audio/wav' });
@@ -576,8 +580,85 @@ const App: React.FC = () => {
     const target = recordingTargetRef.current;
     if (!target) return;
 
+    // Create clip at the recording start position
+    const clipId = `clip-${Date.now()}-${nextClipIdRef.current++}`;
+    const recordingStartSec = recordingStartSecRef.current;
+    const vocalUrl = URL.createObjectURL(wavFile);
+
+    const newClip: Clip = {
+      id: clipId,
+      startSec: recordingStartSec,
+      durationSec: totalSeconds,
+      audioUrl: vocalUrl,
+      offsetSec: 0,
+      originalDurationSec: totalSeconds,
+    };
+
+    // Add clip to track immediately (shows waveform)
+    setTracks(prev => prev.map(t =>
+      t.id === target.trackId ? { ...t, clips: [...(t.clips || []), newClip] } : t
+    ));
+
+    // Create audio element for playback
+    const audioEl = new Audio(vocalUrl);
+    clipAudioMapRef.current.set(clipId, audioEl);
+
     setStatusMessage(`Processing ${totalSeconds.toFixed(1)}s of audio...`);
-    await handleVocalUpload(wavFile, target.trackId, target.instrument);
+    await processClipAudio(wavFile, target.trackId, target.instrument, clipId);
+  };
+
+  // Process a clip through the backend (MIDI conversion or raw audio)
+  const processClipAudio = async (file: File, trackId: string, instrument: InstrumentType, clipId: string) => {
+    const isRawAudio = instrument === InstrumentType.RAW_AUDIO;
+
+    setIsProcessing(true);
+    setError(null);
+    setStatusMessage(isRawAudio ? 'Storing raw audio...' : 'Converting vocal to MIDI...');
+
+    try {
+      console.log(`[Sinatra] Processing clip ${clipId} for track ${trackId}: ${file.size} bytes, instrument: ${instrument}`);
+      await uploadVocal(file, isRawAudio);
+
+      if (isRawAudio) {
+        // Raw audio — clip already has the correct audioUrl
+        setTracks(prev => prev.map(t =>
+          t.id === trackId ? { ...t, name: `Raw Audio (Track ${trackId})` } : t
+        ));
+        setStatusMessage('Done! Raw audio ready.');
+      } else {
+        // MIDI mode: render with instrument
+        setStatusMessage(`Rendering with ${instrument}...`);
+        const audioBlob = await renderMidi(instrument);
+        console.log(`[Sinatra] Rendered audio: ${audioBlob.size} bytes`);
+        const renderedUrl = URL.createObjectURL(audioBlob);
+
+        // Update clip's audioUrl with rendered audio
+        setTracks(prev => prev.map(t => {
+          if (t.id !== trackId) return t;
+          const updatedClips = (t.clips || []).map(c =>
+            c.id === clipId ? { ...c, audioUrl: renderedUrl } : c
+          );
+          return { ...t, clips: updatedClips, name: `${instrument} (Track ${trackId})` };
+        }));
+
+        // Update audio element
+        const audioEl = clipAudioMapRef.current.get(clipId);
+        if (audioEl) {
+          audioEl.src = renderedUrl;
+        } else {
+          clipAudioMapRef.current.set(clipId, new Audio(renderedUrl));
+        }
+
+        setStatusMessage(`Done! Track ${trackId} ready.`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Processing failed';
+      console.error('[Sinatra] Clip processing error:', msg);
+      setError(msg);
+      setStatusMessage('Error');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   const handleRecordToggle = () => {
@@ -605,10 +686,9 @@ const App: React.FC = () => {
       const el = drumAudioElRef.current || new Audio();
       el.src = drumAudioUrlRef.current;
       el.loop = true;
-      // Set volume from track state
       const drumTrack = tracks.find(t => t.id === '1');
       if (drumTrack) {
-        el.volume = drumTrack.volume;
+        el.volume = drumTrack.volume * masterVolume;
       }
       el.addEventListener('loadedmetadata', () => {
         setTracks(prev => prev.map(t =>
@@ -630,87 +710,6 @@ const App: React.FC = () => {
     }
   };
 
-  const handleVocalUpload = async (file: File, targetTrackId?: string, instrument?: InstrumentType) => {
-    const trackId = targetTrackId || selectedTrackId;
-    const inst = instrument || selectedTrack?.instrument || InstrumentType.PIANO;
-    const isRawAudio = inst === InstrumentType.RAW_AUDIO;
-
-    if (trackId === '1') {
-      setError('Select or create a vocal track first (not the drum track)');
-      return;
-    }
-
-    setIsProcessing(true);
-    setError(null);
-    
-    if (isRawAudio) {
-      setStatusMessage('Storing raw audio...');
-    } else {
-      setStatusMessage('Converting vocal to MIDI...');
-    }
-
-    // Show raw vocal waveform immediately
-    const vocalUrl = URL.createObjectURL(file);
-    setTracks(prev => prev.map(t =>
-      t.id === trackId ? { ...t, audioUrl: vocalUrl } : t
-    ));
-
-    try {
-      console.log(`[Sinatra] Uploading vocal for track ${trackId}: ${file.size} bytes, instrument: ${inst}, raw: ${isRawAudio}`);
-      await uploadVocal(file, isRawAudio);
-
-      if (isRawAudio) {
-        // Raw audio: just use the original file
-        const audioEl = trackAudioMapRef.current.get(trackId) || new Audio();
-        audioEl.src = vocalUrl;
-        audioEl.addEventListener('loadedmetadata', () => {
-          setTracks(prev => prev.map(t =>
-            t.id === trackId ? { ...t, audioUrl: vocalUrl, audioDuration: audioEl.duration } : t
-          ));
-        });
-        trackAudioMapRef.current.set(trackId, audioEl);
-
-        setTracks(prev => prev.map(t =>
-          t.id === trackId ? { ...t, name: `Raw Audio (Track ${trackId})`, audioUrl: vocalUrl } : t
-        ));
-        setStatusMessage(`Done! Raw audio track ${trackId} ready.`);
-      } else {
-        // MIDI mode: render with instrument
-        setStatusMessage(`Rendering with ${inst}...`);
-        const audioBlob = await renderMidi(inst);
-        console.log(`[Sinatra] Rendered audio: ${audioBlob.size} bytes`);
-
-        const url = URL.createObjectURL(audioBlob);
-
-        // Store audio element for layered playback
-        const audioEl = trackAudioMapRef.current.get(trackId) || new Audio();
-        audioEl.src = url;
-        audioEl.addEventListener('loadedmetadata', () => {
-          setTracks(prev => prev.map(t =>
-            t.id === trackId ? { ...t, audioUrl: url, audioDuration: audioEl.duration } : t
-          ));
-        });
-        trackAudioMapRef.current.set(trackId, audioEl);
-
-        // Revoke old vocal URL
-        URL.revokeObjectURL(vocalUrl);
-
-        // Update track with rendered audio
-        setTracks(prev => prev.map(t =>
-          t.id === trackId ? { ...t, name: `${inst} (Track ${trackId})`, audioUrl: url } : t
-        ));
-        setStatusMessage(`Done! Track ${trackId} ready. Add more tracks or press Play.`);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Vocal processing failed';
-      console.error('[Sinatra] Vocal upload/render error:', msg);
-      setError(msg);
-      setStatusMessage('Error');
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   // ==============================
   //  TRANSPORT CONTROLS
   // ==============================
@@ -724,15 +723,14 @@ const App: React.FC = () => {
       stopTransport();
       stopMetronome();
 
-      // Pause all audio (keep position)
       if (drumAudioElRef.current) drumAudioElRef.current.pause();
-      trackAudioMapRef.current.forEach(el => el.pause());
+      pauseClipPlayback();
     } else {
       // ---- PLAY from current playheadSec ----
       setIsPlaying(true);
       startTransport(playheadSec);
 
-      // Start metronome if enabled (create AudioContext if needed)
+      // Start metronome if enabled
       if (metronome) {
         if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
           audioCtxRef.current = new AudioContext();
@@ -750,23 +748,12 @@ const App: React.FC = () => {
         if (drumAudioElRef.current.duration) {
           drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
         }
-        drumAudioElRef.current.volume = drumTrack.volume;
+        drumAudioElRef.current.volume = drumTrack.volume * masterVolume;
         drumAudioElRef.current.play().catch(() => {});
       }
 
-      // Play all non-muted tracks from position
-      tracks.forEach(track => {
-        if (track.id === '1') return; // drum handled above
-        if (track.isMuted) return;
-        const el = trackAudioMapRef.current.get(track.id);
-        if (el?.src && el.duration) {
-          if (playheadSec < el.duration) {
-            el.currentTime = playheadSec;
-            el.volume = track.volume;
-            el.play().catch(() => {});
-          }
-        }
-      });
+      // Play all clips
+      scheduleClipPlayback(playheadSec);
     }
   };
 
@@ -782,28 +769,84 @@ const App: React.FC = () => {
       drumAudioElRef.current.pause();
       drumAudioElRef.current.currentTime = 0;
     }
-    trackAudioMapRef.current.forEach(el => {
-      el.pause();
-      el.currentTime = 0;
-    });
+    stopClipPlayback();
   };
 
-  const handleDeleteTrack = (id: string) => {
-    // Don't allow deleting the drum track
-    if (id === '1') return;
+  // ==============================
+  //  CLIP MANAGEMENT
+  // ==============================
+  const handleSelectClip = useCallback((clipId: string | null) => {
+    setSelectedClipId(clipId);
+  }, []);
 
-    // Stop and cleanup audio element
-    const el = trackAudioMapRef.current.get(id);
+  const handleDeleteClip = useCallback(() => {
+    if (!selectedClipId) return;
+
+    // Find and remove clip from its track
+    setTracks(prev => prev.map(t => ({
+      ...t,
+      clips: (t.clips || []).filter(c => c.id !== selectedClipId),
+    })));
+
+    // Cleanup audio element
+    const el = clipAudioMapRef.current.get(selectedClipId);
     if (el) {
       el.pause();
       el.src = '';
-      trackAudioMapRef.current.delete(id);
+      clipAudioMapRef.current.delete(selectedClipId);
     }
 
-    // Remove from tracks
-    setTracks(prev => prev.filter(t => t.id !== id));
+    setSelectedClipId(null);
+  }, [selectedClipId]);
 
-    // If this was the selected track, select the drum track
+  const handleUpdateClip = useCallback((trackId: string, clipId: string, updates: Partial<Clip>) => {
+    setTracks(prev => prev.map(t => {
+      if (t.id !== trackId) return t;
+      return {
+        ...t,
+        clips: (t.clips || []).map(c =>
+          c.id === clipId ? { ...c, ...updates } : c
+        ),
+      };
+    }));
+  }, []);
+
+  // Keyboard listener for backspace/delete to delete selected clip
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+        if (selectedClipId) {
+          e.preventDefault();
+          handleDeleteClip();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedClipId, handleDeleteClip]);
+
+  // ==============================
+  //  TRACK DELETE & UPDATE
+  // ==============================
+  const handleDeleteTrack = (id: string) => {
+    if (id === '1') return;
+
+    // Cleanup clips' audio elements
+    const track = tracks.find(t => t.id === id);
+    if (track?.clips) {
+      track.clips.forEach(clip => {
+        const el = clipAudioMapRef.current.get(clip.id);
+        if (el) {
+          el.pause();
+          el.src = '';
+          clipAudioMapRef.current.delete(clip.id);
+        }
+      });
+    }
+
+    setTracks(prev => prev.filter(t => t.id !== id));
     if (selectedTrackId === id) {
       setSelectedTrackId('1');
     }
@@ -816,26 +859,23 @@ const App: React.FC = () => {
         const currentTrack = prev.find(t => t.id === id);
         if (currentTrack) {
           if (updates.isMuted) {
-            // Muting: save current volume and set to 0
             const unmutedVol = currentTrack.volume > 0 ? currentTrack.volume : (currentTrack.unmutedVolume ?? 0.8);
             updates.volume = 0;
             updates.unmutedVolume = unmutedVol;
           } else {
-            // Unmuting: restore previous volume or default to 0.8
             updates.volume = currentTrack.unmutedVolume ?? 0.8;
             updates.unmutedVolume = undefined;
           }
         }
       }
-      
+
       const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
-      
+
       // Apply mute/unmute in real-time if playing
       if (updates.isMuted !== undefined) {
         const track = updated.find(t => t.id === id);
         if (track) {
           if (id === '1') {
-            // Drum track
             if (drumAudioElRef.current) {
               if (track.isMuted) {
                 drumAudioElRef.current.pause();
@@ -847,40 +887,45 @@ const App: React.FC = () => {
                 drumAudioElRef.current.play().catch(() => {});
               }
             }
-          } else {
-            // Other tracks
-            const el = trackAudioMapRef.current.get(id);
-            if (el) {
-              if (track.isMuted) {
-                el.pause();
-              } else if (isPlaying && el.src) {
-                if (el.duration && playheadSec < el.duration) {
-                  el.currentTime = playheadSec;
-                  el.volume = track.volume * masterVolume;
-                  el.play().catch(() => {});
+          } else if (track.clips) {
+            // Mute/unmute clips
+            track.clips.forEach(clip => {
+              const el = clipAudioMapRef.current.get(clip.id);
+              if (el) {
+                if (track.isMuted) {
+                  el.pause();
+                } else if (isPlaying) {
+                  const currentSec = playheadStartSecRef.current + (performance.now() - transportStartRef.current) / 1000;
+                  const clipEnd = clip.startSec + clip.durationSec;
+                  if (currentSec >= clip.startSec && currentSec < clipEnd) {
+                    el.currentTime = (clip.offsetSec || 0) + (currentSec - clip.startSec);
+                    el.volume = track.volume * masterVolume;
+                    el.play().catch(() => {});
+                  }
                 }
               }
-            }
+            });
           }
         }
       }
-      
+
       // Apply volume changes in real-time
       if (updates.volume !== undefined) {
         const track = updated.find(t => t.id === id);
         if (track && !track.isMuted) {
           if (id === '1') {
-            // Drum track volume
             if (drumAudioElRef.current) {
-              drumAudioElRef.current.volume = updates.volume;
+              drumAudioElRef.current.volume = updates.volume * masterVolume;
             }
-          } else {
-            const el = trackAudioMapRef.current.get(id);
-            if (el) el.volume = updates.volume;
+          } else if (track.clips) {
+            track.clips.forEach(clip => {
+              const el = clipAudioMapRef.current.get(clip.id);
+              if (el) el.volume = updates.volume! * masterVolume;
+            });
           }
         }
       }
-      
+
       return updated;
     });
   };
@@ -901,7 +946,7 @@ const App: React.FC = () => {
     if (isPlaying && !isRecording && audioCtxRef.current) {
       const ctx = audioCtxRef.current;
       if (ctx.state === 'closed') return;
-      
+
       if (metronome) {
         if (ctx.state === 'suspended') {
           ctx.resume().then(() => startMetronome(ctx, bpm));
@@ -920,20 +965,17 @@ const App: React.FC = () => {
   const handleExport = async () => {
     try {
       setStatusMessage('Exporting...');
-      const tracksWithAudio = tracks.filter(t => t.audioUrl && t.id !== '1');
-      if (tracksWithAudio.length === 0) {
+      // Find tracks with clips
+      const tracksWithClips = tracks.filter(t => t.clips && t.clips.length > 0);
+      if (tracksWithClips.length === 0) {
         setError('No tracks to export');
         return;
       }
-      
-      const longestTrack = tracksWithAudio.reduce((longest, track) => {
-        const longestDur = longest.audioDuration || 0;
-        const trackDur = track.audioDuration || 0;
-        return trackDur > longestDur ? track : longest;
-      }, tracksWithAudio[0]);
 
-      if (longestTrack.audioUrl) {
-        const response = await fetch(longestTrack.audioUrl);
+      // Export first clip of first track (simplified)
+      const firstClip = tracksWithClips[0].clips![0];
+      if (firstClip?.audioUrl) {
+        const response = await fetch(firstClip.audioUrl);
         const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -952,8 +994,15 @@ const App: React.FC = () => {
   };
 
   // Calculate project stats
-  const trackCount = tracks.filter(t => t.id !== '1' && t.audioUrl).length;
-  const totalDuration = Math.max(...tracks.map(t => t.audioDuration || 0), 0);
+  const totalDuration = Math.max(
+    ...tracks.map(t => {
+      if (t.clips && t.clips.length > 0) {
+        return Math.max(...t.clips.map(c => c.startSec + c.durationSec));
+      }
+      return t.audioDuration || 0;
+    }),
+    0
+  );
 
   // ==============================
   //  RENDER
@@ -993,17 +1042,20 @@ const App: React.FC = () => {
           tracks={tracks}
           notes={notes}
           selectedTrackId={selectedTrackId}
+          selectedClipId={selectedClipId}
           isPlaying={isPlaying}
           onSelectTrack={handleSelectTrack}
           onUpdateTrack={handleUpdateTrack}
           onAddTrack={addTrack}
           onDeleteTrack={handleDeleteTrack}
           onSeek={handleSeek}
+          onSelectClip={handleSelectClip}
+          onUpdateClip={handleUpdateClip}
         />
       </div>
 
-      <Terminal 
-        isRecording={isRecording} 
+      <Terminal
+        isRecording={isRecording}
         audioLevels={audioLevels}
         height={terminalHeight}
         onHeightChange={setTerminalHeight}
