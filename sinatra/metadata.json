@@ -1,0 +1,7 @@
+{
+  "name": "Sinatra",
+  "description": "A minimalistic hum-to-MIDI sketching tool for musicians.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
