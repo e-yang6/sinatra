@@ -660,7 +660,7 @@ const App: React.FC = () => {
   //  RENDER
   // ==============================
   return (
-    <div className="h-screen w-screen flex flex-col bg-dark-bg text-white overflow-hidden font-sans selection:bg-accent selection:text-white">
+    <div className="h-screen w-screen flex flex-col bg-zinc-950 text-zinc-200 overflow-hidden">
       <Header
         isPlaying={isPlaying}
         isRecording={isRecording}
@@ -698,15 +698,14 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* Status Bar */}
-      <div className="h-6 bg-dark-bg border-t border-dark-border px-4 flex items-center justify-between text-[10px]">
-        <div className="text-zinc-600">Sinatra v0.1.0</div>
+      <div className="h-6 border-t border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-500">
+        <div>Sinatra</div>
         <div className={
           error ? 'text-red-400' :
-          isRecording ? 'text-red-400 animate-pulse' :
-          isProcessing ? 'text-yellow-400 animate-pulse' :
-          statusMessage !== 'Ready' ? 'text-green-400' :
-          'text-zinc-600'
+          isRecording ? 'text-red-400' :
+          isProcessing ? 'text-yellow-400' :
+          statusMessage !== 'Ready' ? 'text-zinc-300' :
+          'text-zinc-500'
         }>
           {error || statusMessage}
         </div>

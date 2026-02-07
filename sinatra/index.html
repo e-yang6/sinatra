@@ -17,14 +17,13 @@
             },
             colors: {
               accent: {
-                DEFAULT: '#6366f1', // Indigo 500
-                hover: '#4f46e5',   // Indigo 600
-                dim: 'rgba(99, 102, 241, 0.15)',
+                DEFAULT: '#6366f1',
+                hover: '#4f46e5',
               },
               dark: {
-                bg: '#09090b',      // Zinc 950
-                surface: '#18181b', // Zinc 900
-                border: '#27272a',  // Zinc 800
+                bg: '#0a0a0a',
+                surface: '#18181b',
+                border: '#27272a',
               }
             }
           }
@@ -35,34 +34,25 @@
       * {
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
-        text-rendering: optimizeLegibility;
       }
       
       body {
-        background-color: #09090b;
-        color: #e4e4e7;
+        background-color: #0a0a0a;
+        color: #d4d4d8;
       }
       
-      /* Custom scrollbar for webkit */
       ::-webkit-scrollbar {
-        width: 6px;
-        height: 6px;
+        width: 4px;
+        height: 4px;
       }
       ::-webkit-scrollbar-track {
-        background: #09090b; 
+        background: #0a0a0a; 
       }
       ::-webkit-scrollbar-thumb {
         background: #27272a; 
-        border-radius: 3px;
       }
       ::-webkit-scrollbar-thumb:hover {
         background: #3f3f46; 
-      }
-      
-      .glass-panel {
-        background: rgba(24, 24, 27, 0.6);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.05);
       }
     </style>
   <script type="importmap">
