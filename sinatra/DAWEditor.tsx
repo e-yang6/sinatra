@@ -4,7 +4,7 @@ import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
 import { InstrumentType, TrackData, Note, Clip } from './types';
-import { uploadDrum, uploadVocal, renderMidi } from './api';
+import { uploadDrum, uploadVocal, renderMidi, uploadSample } from './api';
 
 // ---- WAV encoding utility ----
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -77,6 +77,10 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [error, setError] = useState<string | null>(null);
+
+  // ---- Custom sample state ----
+  const [sampleName, setSampleName] = useState<string | undefined>();
+  const [sampleNote, setSampleNote] = useState<string | undefined>();
 
   // ---- Audio visualization state ----
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
@@ -343,13 +347,21 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       setError(null);
       setStatusMessage('Requesting mic access...');
 
-      // Determine target track ΓÇö auto-create if drum track is selected
+      // Determine target track — auto-create if drum track is selected
       let targetId = selectedTrackId;
       let instrument = selectedInstrument;
       if (targetId === '1') {
         targetId = addTrack();
         instrument = InstrumentType.PIANO;
       }
+
+      // Require a sample to be uploaded for Custom Sample instrument
+      if (instrument === InstrumentType.CUSTOM_SAMPLE && !sampleName) {
+        setError('Upload a one-shot sample first before recording with Custom Sample.');
+        setStatusMessage('Error');
+        return;
+      }
+
       recordingTargetRef.current = { trackId: targetId, instrument };
 
       // Save recording start position (record from wherever the marker is)
@@ -714,6 +726,24 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     }
   };
 
+  const handleSampleUpload = async (file: File) => {
+    setIsProcessing(true);
+    setError(null);
+    setStatusMessage('Uploading one-shot sample...');
+    try {
+      const res = await uploadSample(file);
+      setSampleName(file.name);
+      setSampleNote(res.note_name);
+      setStatusMessage(`Sample loaded! Base pitch: ${res.note_name}. Record a melody to use it.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Sample upload failed';
+      setError(msg);
+      setStatusMessage('Error');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   // ==============================
   //  TRANSPORT CONTROLS
   // ==============================
@@ -1035,10 +1065,13 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           isRecording={isRecording}
           onRecordStart={handleRecordToggle}
           onDrumUpload={handleDrumUpload}
+          onSampleUpload={handleSampleUpload}
           onAddTrack={addTrack}
           selectedTrackName={selectedTrack?.name || 'None'}
           isDrumSelected={selectedTrackId === '1'}
           totalDuration={totalDuration}
+          sampleName={sampleName}
+          sampleNote={sampleNote}
         />
 
         <Timeline

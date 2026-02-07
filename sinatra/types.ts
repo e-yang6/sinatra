@@ -37,6 +37,9 @@ export enum InstrumentType {
   
   // Raw audio (no MIDI conversion)
   RAW_AUDIO = 'Raw Audio',
+
+  // Custom one-shot sample (pitch-shifted to play MIDI notes)
+  CUSTOM_SAMPLE = 'Custom Sample',
 }
 
 export enum KeyScale {

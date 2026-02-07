@@ -19,6 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.bpm import detect_bpm
 from services.transcription import vocal_to_midi
 from services.synth import render_midi_to_wav
+from services.sampler import detect_base_pitch, render_with_sample
 from utils.file_helpers import save_upload, validate_wav, cleanup_file, UPLOAD_DIR
 
 # Verify Basic Pitch is available at startup
@@ -56,6 +57,8 @@ session = {
     "vocal_path": None,
     "midi_path": None,
     "rendered_path": None,
+    "sample_path": None,
+    "sample_base_pitch": None,
 }
 
 
@@ -88,6 +91,41 @@ async def upload_drum(file: UploadFile = File(...)):
     session["drum_bpm"] = bpm
 
     return {"status": "ok", "bpm": bpm, "filename": os.path.basename(file_path)}
+
+
+@app.post("/upload-sample")
+async def upload_sample(file: UploadFile = File(...)):
+    """
+    Upload a one-shot audio sample (WAV).
+    Detects the sample's base pitch and stores it for use as a custom instrument.
+    """
+    if not file.filename.lower().endswith(".wav"):
+        raise HTTPException(status_code=400, detail="Only WAV files are accepted.")
+
+    file_path = await save_upload(file)
+
+    if not validate_wav(file_path):
+        cleanup_file(file_path)
+        raise HTTPException(status_code=400, detail="Invalid WAV file.")
+
+    try:
+        base_pitch = detect_base_pitch(file_path)
+    except Exception as e:
+        cleanup_file(file_path)
+        raise HTTPException(status_code=500, detail=f"Pitch detection failed: {e}")
+
+    session["sample_path"] = file_path
+    session["sample_base_pitch"] = base_pitch
+
+    import librosa as _lr
+    note_name = _lr.midi_to_note(round(base_pitch))
+
+    return {
+        "status": "ok",
+        "filename": os.path.basename(file_path),
+        "base_pitch": base_pitch,
+        "note_name": note_name,
+    }
 
 
 @app.post("/upload-vocal")
@@ -166,7 +204,21 @@ async def render(instrument: str = Form(default="Piano")):
         )
 
     try:
-        wav_path = render_midi_to_wav(midi_path, instrument=instrument)
+        if instrument == "Custom Sample":
+            # Use the uploaded one-shot sample as the instrument
+            sample_path = session.get("sample_path")
+            if not sample_path or not os.path.exists(sample_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail="No sample uploaded. Upload a one-shot sample first.",
+                )
+            wav_path = render_with_sample(
+                midi_path,
+                sample_path,
+                base_pitch=session.get("sample_base_pitch"),
+            )
+        else:
+            wav_path = render_midi_to_wav(midi_path, instrument=instrument)
     except FileNotFoundError as e:
         raise HTTPException(status_code=500, detail=str(e))
     except Exception as e:

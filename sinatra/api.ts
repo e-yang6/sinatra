@@ -57,6 +57,34 @@ export async function uploadVocal(file: File, rawAudio: boolean = false): Promis
   return response.json();
 }
 
+export interface UploadSampleResponse {
+  status: string;
+  filename: string;
+  base_pitch: number;
+  note_name: string;
+}
+
+/**
+ * Upload a one-shot audio sample for use as a custom instrument.
+ * The backend detects the sample's base pitch automatically.
+ */
+export async function uploadSample(file: File): Promise<UploadSampleResponse> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/upload-sample`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
 /**
  * Render the latest MIDI to WAV with the selected instrument
  * If raw audio mode, returns the original audio file

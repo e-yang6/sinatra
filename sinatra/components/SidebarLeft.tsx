@@ -43,6 +43,7 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options })
     'Electric Guitar': 'Guitar',
     'Organ': 'Other',
     'Raw Audio': 'Other',
+    'Custom Sample': 'Other',
   };
 
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -323,10 +324,13 @@ interface SidebarLeftProps {
   onRecordStart: () => void;
   onDrumUpload?: (file: File) => void;
   onVocalUpload?: (file: File) => void;
+  onSampleUpload?: (file: File) => void;
   onAddTrack: () => void;
   selectedTrackName: string;
   isDrumSelected: boolean;
   totalDuration?: number;
+  sampleName?: string;
+  sampleNote?: string;
 }
 
 export const SidebarLeft: React.FC<SidebarLeftProps> = ({
@@ -335,12 +339,16 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   isRecording,
   onRecordStart,
   onDrumUpload,
+  onSampleUpload,
   onAddTrack,
   selectedTrackName,
   isDrumSelected,
   totalDuration = 0,
+  sampleName,
+  sampleNote,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const sampleInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -392,6 +400,47 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
             onChange={onInstrumentChange}
             options={Object.values(InstrumentType)}
           />
+
+          {/* One-shot sample upload (shown when Custom Sample is selected) */}
+          {selectedInstrument === InstrumentType.CUSTOM_SAMPLE && (
+            <div className="flex flex-col gap-1.5 mt-1">
+              <button
+                onClick={() => sampleInputRef.current?.click()}
+                className="h-9 rounded-lg bg-dark-surface border border-dashed border-zinc-600 hover:border-zinc-500 hover:bg-zinc-800 text-[11px] text-zinc-400 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Upload size={12} />
+                {sampleName ? 'Change Sample' : 'Upload One-Shot'}
+              </button>
+              <input
+                type="file"
+                ref={sampleInputRef}
+                className="hidden"
+                accept="audio/*,.wav"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) onSampleUpload?.(file);
+                  e.target.value = '';
+                }}
+              />
+              {sampleName && (
+                <div className="flex flex-col gap-0.5 px-2 py-1.5 bg-zinc-900 border border-zinc-800 rounded">
+                  <span className="text-[10px] text-zinc-400 truncate" title={sampleName}>
+                    {sampleName}
+                  </span>
+                  {sampleNote && (
+                    <span className="text-[10px] text-zinc-500">
+                      Base pitch: <span className="text-zinc-300 font-mono">{sampleNote}</span>
+                    </span>
+                  )}
+                </div>
+              )}
+              {!sampleName && (
+                <p className="text-[10px] text-zinc-600 px-1 text-center">
+                  Upload a single note/sound to use as instrument
+                </p>
+              )}
+            </div>
+          )}
         </div>
       )}
 
