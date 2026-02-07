@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Volume2, VolumeX, Palette } from 'lucide-react';
+import { Volume2, VolumeX, Palette, Trash2 } from 'lucide-react';
 import { TrackData } from '../types';
 
 const TRACK_COLORS = [
@@ -27,6 +27,7 @@ interface TrackProps {
   onColorChange: (color: string) => void;
   onNameChange: (name: string) => void;
   onSeek: (sec: number) => void;
+  onDelete?: () => void;
 }
 
 export const Track: React.FC<TrackProps> = ({
@@ -41,6 +42,7 @@ export const Track: React.FC<TrackProps> = ({
   onColorChange,
   onNameChange,
   onSeek,
+  onDelete,
 }) => {
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
@@ -173,6 +175,21 @@ export const Track: React.FC<TrackProps> = ({
             </button>
             <span className="text-[10px] font-mono text-zinc-400">{Math.round(track.volume * 100)}%</span>
           </div>
+          {onDelete && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (window.confirm(`Delete "${track.name}"?`)) {
+                  onDelete();
+                }
+              }}
+              className="text-xs text-red-500 hover:text-red-400 hover:bg-red-500/10 rounded px-2 py-1 transition-colors flex items-center gap-1 justify-center"
+              title="Delete track"
+            >
+              <Trash2 size={12} />
+              Delete
+            </button>
+          )}
           <input
             type="range"
             min="0"

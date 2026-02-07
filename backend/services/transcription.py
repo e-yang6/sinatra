@@ -1,133 +1,137 @@
-import librosa
-import pretty_midi
-import numpy as np
-from scipy.ndimage import median_filter
+"""
+Vocal-to-MIDI transcription using Spotify's Basic Pitch (ONNX backend).
+
+Basic Pitch is an ML model that detects pitch, onset, and notes from audio.
+It handles polyphonic audio and is far more accurate than pYIN for melodies.
+We run it via ONNX Runtime (no TensorFlow needed).
+"""
+
+import os
+import warnings
+
+# Suppress noisy warnings from basic-pitch about missing optional backends
+warnings.filterwarnings("ignore", message=".*Coremltools is not installed.*")
+warnings.filterwarnings("ignore", message=".*tflite-runtime is not installed.*")
+warnings.filterwarnings("ignore", message=".*Tensorflow is not installed.*")
+warnings.filterwarnings("ignore", message=".*pkg_resources is deprecated.*")
+
+from basic_pitch.inference import predict
+from basic_pitch import ICASSP_2022_MODEL_PATH
 
 from utils.file_helpers import generate_filepath
 
 # ---- Tuning knobs ----
-MIN_NOTE_DURATION = 0.08        # Ignore notes shorter than 80ms
-VOICED_PROB_THRESHOLD = 0.3     # Trust frames with >30% voicing confidence
-MEDIAN_KERNEL = 7               # Smooth pitch over ~160ms (7 frames × 23ms each)
-RMS_SILENCE_THRESHOLD = 0.002   # Treat frames below this energy as silent
+ONSET_THRESHOLD = 0.6       # Higher = only strong note onsets (was 0.5)
+FRAME_THRESHOLD = 0.45      # Higher = only confident frames count (was 0.3)
+MIN_NOTE_LENGTH_MS = 127.7  # Ignore notes shorter than ~128ms (one 32nd note at 120bpm)
+MIN_FREQ_HZ = 80.0          # ~E2 — ignore low rumble/noise
+MAX_FREQ_HZ = 1500.0        # ~G6 — typical vocal range ceiling
+
+# ---- Post-processing ----
+MIN_NOTE_DURATION_SEC = 0.1     # Drop notes shorter than 100ms after detection
+MIN_VELOCITY = 40               # Drop very quiet notes
+MERGE_GAP_SEC = 0.06            # Merge same-pitch notes separated by < 60ms
+MAX_NOTES_PER_SECOND = 8        # Cap to prevent machine-gun note spam
 
 
 def vocal_to_midi(wav_path: str, bpm: float = 120.0) -> str:
     """
-    Convert a vocal WAV recording to MIDI using librosa's pYIN pitch detector.
-    Tuned for full melodic performances — ignores background noise and
-    smooths out small pitch wobble so held notes stay on one pitch.
-
-    Args:
-        wav_path: Path to the input WAV file.
-        bpm: Tempo to embed in the MIDI file (from drum BPM detection).
+    Convert a vocal WAV recording to MIDI using Spotify's Basic Pitch.
+    Post-processes to remove noise, merge stutters, and snap to clean notes.
     """
-    # Load audio — mono, 22050 Hz
-    y, sr = librosa.load(wav_path, sr=22050, mono=True)
+    print("=" * 60)
+    print("🎵 USING SPOTIFY BASIC PITCH (ML MODEL) 🎵")
+    print(f"📁 Transcribing: {os.path.basename(wav_path)}")
+    print(f"🎚️  BPM: {bpm}")
+    print(f"🤖 Model: {ICASSP_2022_MODEL_PATH}")
+    print("=" * 60)
 
-    hop_length = 512
-
-    # ---- Energy-based silence detection ----
-    # Compute RMS energy per frame — frames below threshold are silent
-    rms = librosa.feature.rms(y=y, frame_length=2048, hop_length=hop_length)[0]
-
-    # ---- Pitch detection (pYIN) ----
-    f0, voiced_flag, voiced_probs = librosa.pyin(
-        y,
-        sr=sr,
-        fmin=librosa.note_to_hz('C2'),
-        fmax=librosa.note_to_hz('C6'),
-        frame_length=2048,
-        hop_length=hop_length,
+    # Run Basic Pitch inference (uses ONNX model automatically)
+    model_output, midi_data, note_events = predict(
+        audio_path=wav_path,
+        model_or_model_path=ICASSP_2022_MODEL_PATH,
+        onset_threshold=ONSET_THRESHOLD,
+        frame_threshold=FRAME_THRESHOLD,
+        minimum_note_length=MIN_NOTE_LENGTH_MS,
+        minimum_frequency=MIN_FREQ_HZ,
+        maximum_frequency=MAX_FREQ_HZ,
+        melodia_trick=True,
+        midi_tempo=bpm,
     )
 
-    n_frames = min(len(f0), len(rms), len(voiced_flag), len(voiced_probs))
-    times = librosa.frames_to_time(np.arange(n_frames), sr=sr, hop_length=hop_length)
+    raw_notes = sum(len(inst.notes) for inst in midi_data.instruments)
+    print(f"   Raw notes from Basic Pitch: {raw_notes}")
 
-    # ---- Convert to MIDI pitch values with strict voicing ----
-    midi_pitches = np.zeros(n_frames)
-    for i in range(n_frames):
-        is_voiced = (
-            voiced_flag[i]
-            and not np.isnan(f0[i])
-            and voiced_probs[i] >= VOICED_PROB_THRESHOLD
-            and rms[i] >= RMS_SILENCE_THRESHOLD
-        )
-        if is_voiced:
-            midi_pitches[i] = librosa.hz_to_midi(f0[i])
+    # ---- Post-processing for each instrument ----
+    for inst in midi_data.instruments:
+        # 1. Strip pitch bends — snap to exact semitones
+        inst.pitch_bends = []
 
-    # ---- Heavy median filter to kill pitch jitter ----
-    voiced_mask = midi_pitches > 0
-    if np.any(voiced_mask):
-        smoothed = median_filter(midi_pitches, size=MEDIAN_KERNEL)
-        midi_pitches = np.where(voiced_mask, np.round(smoothed).astype(int), 0)
+        # 2. Round pitches to nearest MIDI note
+        for note in inst.notes:
+            note.pitch = int(round(max(0, min(127, note.pitch))))
 
-    # ---- Build MIDI notes ----
-    midi = pretty_midi.PrettyMIDI(initial_tempo=bpm)
-    instrument = pretty_midi.Instrument(program=0, name='Vocal')
+        # 3. Drop short notes and quiet notes
+        inst.notes = [
+            n for n in inst.notes
+            if (n.end - n.start) >= MIN_NOTE_DURATION_SEC
+            and n.velocity >= MIN_VELOCITY
+        ]
 
-    current_note_start = None
-    current_pitch = None
+        # 4. Sort by start time
+        inst.notes.sort(key=lambda n: n.start)
 
-    for i in range(n_frames):
-        pitch = int(midi_pitches[i])
+        # 5. Merge consecutive same-pitch notes with tiny gaps
+        merged = []
+        for note in inst.notes:
+            if (
+                merged
+                and note.pitch == merged[-1].pitch
+                and (note.start - merged[-1].end) < MERGE_GAP_SEC
+            ):
+                # Extend the previous note
+                merged[-1].end = max(merged[-1].end, note.end)
+                merged[-1].velocity = max(merged[-1].velocity, note.velocity)
+            else:
+                merged.append(note)
+        inst.notes = merged
 
-        if pitch > 0:
-            pitch = int(np.clip(pitch, 0, 127))
+        # 6. Limit note density — if too many notes in a short window, keep the loudest
+        if inst.notes:
+            duration = inst.notes[-1].end - inst.notes[0].start
+            if duration > 0:
+                notes_per_sec = len(inst.notes) / duration
+                if notes_per_sec > MAX_NOTES_PER_SECOND:
+                    # Bucket into 0.25s windows, keep top notes per window
+                    max_per_window = max(2, int(MAX_NOTES_PER_SECOND * 0.25))
+                    filtered = []
+                    window_start = inst.notes[0].start
+                    window_notes = []
 
-            if current_pitch is None:
-                current_note_start = times[i]
-                current_pitch = pitch
-            elif pitch != current_pitch:
-                duration = times[i] - current_note_start
-                if duration >= MIN_NOTE_DURATION:
-                    instrument.notes.append(pretty_midi.Note(
-                        velocity=100,
-                        pitch=current_pitch,
-                        start=current_note_start,
-                        end=times[i],
-                    ))
-                current_note_start = times[i]
-                current_pitch = pitch
-        else:
-            if current_pitch is not None:
-                duration = times[i] - current_note_start
-                if duration >= MIN_NOTE_DURATION:
-                    instrument.notes.append(pretty_midi.Note(
-                        velocity=100,
-                        pitch=current_pitch,
-                        start=current_note_start,
-                        end=times[i],
-                    ))
-                current_pitch = None
-                current_note_start = None
+                    for note in inst.notes:
+                        if note.start >= window_start + 0.25:
+                            # Flush window: keep loudest notes
+                            window_notes.sort(key=lambda n: n.velocity, reverse=True)
+                            filtered.extend(window_notes[:max_per_window])
+                            window_start = note.start
+                            window_notes = [note]
+                        else:
+                            window_notes.append(note)
 
-    # Close final note
-    if current_pitch is not None and current_note_start is not None:
-        end_time = times[-1] if n_frames > 0 else 0
-        duration = end_time - current_note_start
-        if duration >= MIN_NOTE_DURATION:
-            instrument.notes.append(pretty_midi.Note(
-                velocity=100,
-                pitch=current_pitch,
-                start=current_note_start,
-                end=end_time,
-            ))
+                    # Flush last window
+                    window_notes.sort(key=lambda n: n.velocity, reverse=True)
+                    filtered.extend(window_notes[:max_per_window])
 
-    # ---- Merge adjacent notes of the same pitch (kills micro-gaps) ----
-    merged_notes = []
-    for note in sorted(instrument.notes, key=lambda n: n.start):
-        if merged_notes and note.pitch == merged_notes[-1].pitch and (note.start - merged_notes[-1].end) < 0.08:
-            # Extend previous note
-            merged_notes[-1].end = note.end
-        else:
-            merged_notes.append(note)
+                    filtered.sort(key=lambda n: n.start)
+                    inst.notes = filtered
 
-    instrument.notes = merged_notes
-    midi.instruments.append(instrument)
+    final_notes = sum(len(inst.notes) for inst in midi_data.instruments)
+    print(f"✅ After cleanup: {final_notes} notes (removed {raw_notes - final_notes} noisy notes)")
 
     midi_path = generate_filepath("mid")
-    midi.write(midi_path)
+    midi_data.write(midi_path)
 
-    print(f"[Transcription] {len(instrument.notes)} notes from {times[-1]:.1f}s of audio")
+    print(f"💾 MIDI saved: {os.path.basename(midi_path)}")
+    print("=" * 60)
+
     return midi_path
