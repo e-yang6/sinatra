@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Music, Clock, ArrowRight, LogOut } from 'lucide-react';
+import { Plus, Music, Clock, ArrowRight, LogOut, Home, Settings, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { Sidebar, SidebarBody, SidebarLink } from '../components/ui/sidebar';
+import { motion } from 'framer-motion';
+import { cn } from '../lib/utils';
+
+const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
 
 interface Project {
   id: string;
@@ -12,12 +17,42 @@ interface Project {
   user_id: string;
 }
 
+const Logo = () => {
+  return (
+    <Link
+      to="/"
+      className="font-normal flex space-x-2 items-center text-sm text-zinc-200 py-1 relative z-20"
+    >
+      <img src={sinatraLogo} alt="SINATRA" className="h-5 w-5 flex-shrink-0" />
+      <motion.span
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="font-medium text-zinc-200 whitespace-pre"
+      >
+        SINATRA
+      </motion.span>
+    </Link>
+  );
+};
+
+const LogoIcon = () => {
+  return (
+    <Link
+      to="/"
+      className="font-normal flex space-x-2 items-center text-sm text-zinc-200 py-1 relative z-20"
+    >
+      <img src={sinatraLogo} alt="SINATRA" className="h-5 w-5 flex-shrink-0" />
+    </Link>
+  );
+};
+
 export const ProjectsPage: React.FC = () => {
   const { user, signOut, loading } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [newProjectName, setNewProjectName] = useState('');
   const [showNewProjectInput, setShowNewProjectInput] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -106,26 +141,77 @@ export const ProjectsPage: React.FC = () => {
     return null;
   }
 
-  return (
-    <div className="h-screen w-screen flex flex-col bg-zinc-950 text-zinc-200">
-      {/* Header */}
-      <div className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-zinc-200">My Projects</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-zinc-500">{user.email}</span>
-          <button
-            onClick={signOut}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-300 transition-colors"
-          >
-            <LogOut size={14} />
-            Sign Out
-          </button>
-        </div>
-      </div>
+  const sidebarLinks = [
+    {
+      label: "Projects",
+      href: "/projects",
+      icon: (
+        <Home className="text-zinc-300 h-5 w-5 flex-shrink-0" />
+      ),
+    },
+    {
+      label: "Settings",
+      href: "#",
+      icon: (
+        <Settings className="text-zinc-300 h-5 w-5 flex-shrink-0" />
+      ),
+    },
+  ];
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-6xl mx-auto">
+  return (
+    <div className={cn(
+      "rounded-md flex flex-col md:flex-row bg-zinc-950 w-full flex-1 max-w-7xl mx-auto border border-zinc-800 overflow-hidden",
+      "h-screen"
+    )}>
+      <Sidebar open={sidebarOpen} setOpen={setSidebarOpen}>
+        <SidebarBody className="justify-between gap-10">
+          <div className="flex flex-col flex-1 overflow-y-auto overflow-x-hidden">
+            {sidebarOpen ? <Logo /> : <LogoIcon />}
+            <div className="mt-8 flex flex-col gap-2">
+              {sidebarLinks.map((link, idx) => (
+                <SidebarLink key={idx} link={link} />
+              ))}
+            </div>
+          </div>
+          <div>
+            <SidebarLink
+              link={{
+                label: user.email || "User",
+                href: "#",
+                icon: (
+                  <div className="h-7 w-7 flex-shrink-0 rounded-full bg-[#c9a961] flex items-center justify-center text-zinc-950 font-semibold text-xs">
+                    {user.email?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                ),
+              }}
+            />
+            <SidebarLink
+              link={{
+                label: "Sign Out",
+                href: "#",
+                icon: (
+                  <LogOut className="text-zinc-300 h-5 w-5 flex-shrink-0" />
+                ),
+              }}
+              className="mt-2"
+              onClick={(e: React.MouseEvent) => {
+                e.preventDefault();
+                signOut();
+              }}
+            />
+          </div>
+        </SidebarBody>
+      </Sidebar>
+      
+      {/* Main Content */}
+      <div className="flex flex-1">
+        <div className="p-2 md:p-10 rounded-tl-2xl border-l border-zinc-800 bg-zinc-950 flex flex-col gap-2 flex-1 w-full h-full overflow-y-auto">
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold text-zinc-200 mb-2">My Projects</h1>
+            <p className="text-sm text-zinc-500">Create and manage your music projects</p>
+          </div>
+
           {/* New Project Button/Input */}
           {!showNewProjectInput ? (
             <button
@@ -151,7 +237,7 @@ export const ProjectsPage: React.FC = () => {
                 }}
                 placeholder="Project name..."
                 autoFocus
-                className="flex-1 px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+                className="flex-1 px-4 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-[#c9a961]"
               />
               <button
                 onClick={createProject}
