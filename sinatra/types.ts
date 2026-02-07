@@ -1,8 +1,42 @@
 export enum InstrumentType {
+  // Piano
   PIANO = 'Piano',
-  SYNTH = 'Synth',
+  ELECTRIC_PIANO = 'Electric Piano',
+  HARPSICHORD = 'Harpsichord',
+  
+  // Strings
   STRINGS = 'Strings',
-  BASS = 'Bass'
+  VIOLIN = 'Violin',
+  CELLO = 'Cello',
+  
+  // Brass
+  TRUMPET = 'Trumpet',
+  TROMBONE = 'Trombone',
+  FRENCH_HORN = 'French Horn',
+  
+  // Woodwinds
+  FLUTE = 'Flute',
+  SAXOPHONE = 'Saxophone',
+  CLARINET = 'Clarinet',
+  
+  // Synth
+  SYNTH = 'Synth',
+  SYNTH_PAD = 'Synth Pad',
+  SYNTH_LEAD = 'Synth Lead',
+  
+  // Bass
+  BASS = 'Bass',
+  ACOUSTIC_BASS = 'Acoustic Bass',
+  
+  // Guitar
+  GUITAR = 'Guitar',
+  ELECTRIC_GUITAR = 'Electric Guitar',
+  
+  // Other
+  ORGAN = 'Organ',
+  
+  // Raw audio (no MIDI conversion)
+  RAW_AUDIO = 'Raw Audio',
 }
 
 export enum KeyScale {

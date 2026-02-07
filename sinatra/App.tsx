@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
@@ -155,20 +155,25 @@ const App: React.FC = () => {
   //  METRONOME
   // ==================================
   const startMetronome = useCallback((ctx: AudioContext, currentBpm: number) => {
+    // Stop any existing metronome first
+    clearInterval(metronomeTimerRef.current);
+    
     const beatSec = 60 / currentBpm;
     let beat = 0;
     nextBeatRef.current = ctx.currentTime;
 
     const scheduler = () => {
+      // Recalculate beatSec in case BPM changed
+      const currentBeatSec = 60 / bpm;
       while (nextBeatRef.current < ctx.currentTime + 0.1) {
         scheduleClick(ctx, nextBeatRef.current, beat % BEATS_PER_BAR === 0);
-        nextBeatRef.current += beatSec;
+        nextBeatRef.current += currentBeatSec;
         beat++;
       }
     };
     metronomeTimerRef.current = window.setInterval(scheduler, 25);
     scheduler();
-  }, []);
+  }, [bpm]);
 
   const stopMetronome = useCallback(() => {
     clearInterval(metronomeTimerRef.current);
@@ -298,7 +303,13 @@ const App: React.FC = () => {
       setIsRecording(true);
       setNotes([]);
       startTransport(0);
-      startDrumPlayback(0);
+      
+      // Start drum playback only if not muted
+      const drumTrack = tracks.find(t => t.id === '1');
+      if (drumTrack && !drumTrack.isMuted) {
+        startDrumPlayback(0);
+      }
+      
       if (metronome) startMetronome(ctx, bpm);
 
       // Play back all other recorded tracks from 0
@@ -369,7 +380,17 @@ const App: React.FC = () => {
       return;
     }
 
-    const wavBlob = encodeWav(merged, sampleRate);
+    // Normalize audio to a reasonable level (target peak at 0.8 to avoid clipping)
+    // This boosts quiet recordings significantly
+    const targetPeak = 0.8;
+    const gain = maxAmp > 0 ? targetPeak / maxAmp : 1.0;
+    const normalized = new Float32Array(merged.length);
+    for (let i = 0; i < merged.length; i++) {
+      normalized[i] = merged[i] * gain;
+    }
+    console.log(`[Sinatra] Applied gain: ${gain.toFixed(2)}x (peak: ${maxAmp.toFixed(4)} → ${targetPeak})`);
+
+    const wavBlob = encodeWav(normalized, sampleRate);
     const wavFile = new File([wavBlob], 'recording.wav', { type: 'audio/wav' });
 
     const target = recordingTargetRef.current;
@@ -427,6 +448,7 @@ const App: React.FC = () => {
   const handleVocalUpload = async (file: File, targetTrackId?: string, instrument?: InstrumentType) => {
     const trackId = targetTrackId || selectedTrackId;
     const inst = instrument || selectedTrack?.instrument || InstrumentType.PIANO;
+    const isRawAudio = inst === InstrumentType.RAW_AUDIO;
 
     if (trackId === '1') {
       setError('Select or create a vocal track first (not the drum track)');
@@ -435,7 +457,12 @@ const App: React.FC = () => {
 
     setIsProcessing(true);
     setError(null);
-    setStatusMessage('Converting vocal to MIDI...');
+    
+    if (isRawAudio) {
+      setStatusMessage('Storing raw audio...');
+    } else {
+      setStatusMessage('Converting vocal to MIDI...');
+    }
 
     // Show raw vocal waveform immediately
     const vocalUrl = URL.createObjectURL(file);
@@ -444,34 +471,51 @@ const App: React.FC = () => {
     ));
 
     try {
-      console.log(`[Sinatra] Uploading vocal for track ${trackId}: ${file.size} bytes, instrument: ${inst}`);
-      await uploadVocal(file);
+      console.log(`[Sinatra] Uploading vocal for track ${trackId}: ${file.size} bytes, instrument: ${inst}, raw: ${isRawAudio}`);
+      await uploadVocal(file, isRawAudio);
 
-      setStatusMessage(`Rendering with ${inst}...`);
-      const audioBlob = await renderMidi(inst);
-      console.log(`[Sinatra] Rendered audio: ${audioBlob.size} bytes`);
+      if (isRawAudio) {
+        // Raw audio: just use the original file
+        const audioEl = trackAudioMapRef.current.get(trackId) || new Audio();
+        audioEl.src = vocalUrl;
+        audioEl.addEventListener('loadedmetadata', () => {
+          setTracks(prev => prev.map(t =>
+            t.id === trackId ? { ...t, audioUrl: vocalUrl, audioDuration: audioEl.duration } : t
+          ));
+        });
+        trackAudioMapRef.current.set(trackId, audioEl);
 
-      const url = URL.createObjectURL(audioBlob);
-
-      // Store audio element for layered playback
-      const audioEl = trackAudioMapRef.current.get(trackId) || new Audio();
-      audioEl.src = url;
-      audioEl.addEventListener('loadedmetadata', () => {
         setTracks(prev => prev.map(t =>
-          t.id === trackId ? { ...t, audioUrl: url, audioDuration: audioEl.duration } : t
+          t.id === trackId ? { ...t, name: `Raw Audio (Track ${trackId})`, audioUrl: vocalUrl } : t
         ));
-      });
-      trackAudioMapRef.current.set(trackId, audioEl);
+        setStatusMessage(`Done! Raw audio track ${trackId} ready.`);
+      } else {
+        // MIDI mode: render with instrument
+        setStatusMessage(`Rendering with ${inst}...`);
+        const audioBlob = await renderMidi(inst);
+        console.log(`[Sinatra] Rendered audio: ${audioBlob.size} bytes`);
 
-      // Revoke old vocal URL
-      URL.revokeObjectURL(vocalUrl);
+        const url = URL.createObjectURL(audioBlob);
 
-      // Update track with rendered audio
-      setTracks(prev => prev.map(t =>
-        t.id === trackId ? { ...t, name: `${inst} (Track ${trackId})`, audioUrl: url } : t
-      ));
+        // Store audio element for layered playback
+        const audioEl = trackAudioMapRef.current.get(trackId) || new Audio();
+        audioEl.src = url;
+        audioEl.addEventListener('loadedmetadata', () => {
+          setTracks(prev => prev.map(t =>
+            t.id === trackId ? { ...t, audioUrl: url, audioDuration: audioEl.duration } : t
+          ));
+        });
+        trackAudioMapRef.current.set(trackId, audioEl);
 
-      setStatusMessage(`Done! Track ${trackId} ready. Add more tracks or press Play.`);
+        // Revoke old vocal URL
+        URL.revokeObjectURL(vocalUrl);
+
+        // Update track with rendered audio
+        setTracks(prev => prev.map(t =>
+          t.id === trackId ? { ...t, name: `${inst} (Track ${trackId})`, audioUrl: url } : t
+        ));
+        setStatusMessage(`Done! Track ${trackId} ready. Add more tracks or press Play.`);
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Vocal processing failed';
       console.error('[Sinatra] Vocal upload/render error:', msg);
@@ -502,8 +546,9 @@ const App: React.FC = () => {
       setIsPlaying(true);
       startTransport(playheadSec);
 
-      // Start drum from position (loops)
-      if (drumAudioElRef.current?.src) {
+      // Start drum from position (loops) - only if not muted
+      const drumTrack = tracks.find(t => t.id === '1');
+      if (drumAudioElRef.current?.src && drumTrack && !drumTrack.isMuted) {
         if (drumAudioElRef.current.duration) {
           drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
         }
@@ -545,12 +590,71 @@ const App: React.FC = () => {
   };
 
   const handleUpdateTrack = (id: string, updates: Partial<TrackData>) => {
-    setTracks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
-    if (updates.volume !== undefined) {
-      const el = trackAudioMapRef.current.get(id);
-      if (el) el.volume = updates.volume;
-    }
+    setTracks(prev => {
+      const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
+      
+      // Apply mute/unmute in real-time if playing
+      if (updates.isMuted !== undefined) {
+        const track = updated.find(t => t.id === id);
+        if (track) {
+          if (id === '1') {
+            // Drum track
+            if (drumAudioElRef.current) {
+              if (track.isMuted) {
+                drumAudioElRef.current.pause();
+              } else if (isPlaying) {
+                if (drumAudioElRef.current.duration) {
+                  drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
+                }
+                drumAudioElRef.current.play().catch(() => {});
+              }
+            }
+          } else {
+            // Other tracks
+            const el = trackAudioMapRef.current.get(id);
+            if (el) {
+              if (track.isMuted) {
+                el.pause();
+              } else if (isPlaying && el.src) {
+                if (el.duration && playheadSec < el.duration) {
+                  el.currentTime = playheadSec;
+                  el.volume = track.volume;
+                  el.play().catch(() => {});
+                }
+              }
+            }
+          }
+        }
+      }
+      
+      // Apply volume changes in real-time
+      if (updates.volume !== undefined) {
+        const track = updated.find(t => t.id === id);
+        if (track && !track.isMuted) {
+          if (id === '1') {
+            // Drum track volume is handled by the audio element's volume property
+            // We could add a gain node if needed, but for now drum volume is fixed
+          } else {
+            const el = trackAudioMapRef.current.get(id);
+            if (el) el.volume = updates.volume;
+          }
+        }
+      }
+      
+      return updated;
+    });
   };
+
+  // Restart metronome when BPM changes during recording/playback
+  useEffect(() => {
+    if ((isRecording || isPlaying) && metronome && audioCtxRef.current) {
+      const ctx = audioCtxRef.current;
+      if (ctx.state !== 'closed') {
+        stopMetronome();
+        startMetronome(ctx, bpm);
+      }
+    }
+  }, [bpm, isRecording, isPlaying, metronome, startMetronome, stopMetronome]);
 
   // ==============================
   //  RENDER

@@ -12,7 +12,8 @@ export interface UploadDrumResponse {
 
 export interface UploadVocalResponse {
   status: string;
-  midi_filename: string;
+  midi_filename: string | null;
+  raw_audio?: boolean;
 }
 
 /**
@@ -36,11 +37,12 @@ export async function uploadDrum(file: File): Promise<UploadDrumResponse> {
 }
 
 /**
- * Upload a vocal WAV file and convert to MIDI
+ * Upload a vocal WAV file and convert to MIDI (or store as raw audio)
  */
-export async function uploadVocal(file: File): Promise<UploadVocalResponse> {
+export async function uploadVocal(file: File, rawAudio: boolean = false): Promise<UploadVocalResponse> {
   const formData = new FormData();
   formData.append('file', file);
+  formData.append('raw_audio', rawAudio.toString());
 
   const response = await fetch(`${API_BASE}/upload-vocal`, {
     method: 'POST',
@@ -57,6 +59,7 @@ export async function uploadVocal(file: File): Promise<UploadVocalResponse> {
 
 /**
  * Render the latest MIDI to WAV with the selected instrument
+ * If raw audio mode, returns the original audio file
  */
 export async function renderMidi(instrument: string): Promise<Blob> {
   const formData = new FormData();
