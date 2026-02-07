@@ -111,3 +111,83 @@ export async function processAll(
     bpm,
   };
 }
+
+// ==================== CHAT API ====================
+
+export interface ChatAction {
+  type: 'ADD_TRACK' | 'SET_BPM' | 'CHANGE_INSTRUMENT' | 'TRANSPORT';
+  instrument?: string;
+  value?: number;
+  command?: string;
+}
+
+export interface ChatResponse {
+  response: string;
+  actions: ChatAction[];
+  transcription?: string;
+}
+
+export interface ProjectContext {
+  bpm: number;
+  isPlaying: boolean;
+  isRecording: boolean;
+  selectedInstrument: string;
+  tracks: Array<{
+    id: string;
+    name: string;
+    instrument?: string;
+    isMuted: boolean;
+  }>;
+}
+
+/**
+ * Send a text message to the AI chatbot
+ */
+export async function sendChatMessage(
+  message: string,
+  context?: ProjectContext
+): Promise<ChatResponse> {
+  const response = await fetch(`${API_BASE}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, context }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Chat request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Send a voice recording to the AI chatbot (speech-to-text + chat)
+ */
+export async function sendVoiceMessage(
+  audioBlob: Blob,
+  context?: ProjectContext
+): Promise<ChatResponse> {
+  const formData = new FormData();
+  formData.append('file', audioBlob, 'voice.webm');
+  formData.append('context', JSON.stringify(context || {}));
+
+  const response = await fetch(`${API_BASE}/chat/voice`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Voice chat failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.json();
+}
+
+/**
+ * Clear the chat conversation history
+ */
+export async function clearChatHistory(): Promise<void> {
+  await fetch(`${API_BASE}/chat/clear`, { method: 'POST' });
+}

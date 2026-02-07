@@ -8,7 +8,7 @@ import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
 import { Chatbot } from './components/Chatbot';
 import { InstrumentType, TrackData, Note } from './types';
-import { uploadDrum, uploadVocal, renderMidi } from './api';
+import { uploadDrum, uploadVocal, renderMidi, ChatAction, ProjectContext } from './api';
 
 // ---- WAV encoding utility ----
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -972,6 +972,50 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
     }
   };
 
+  // ==============================
+  //  CHAT ACTION HANDLER
+  // ==============================
+  const handleChatAction = useCallback((action: ChatAction) => {
+    console.log('[Sinatra] Chat action:', action);
+    
+    switch (action.type) {
+      case 'ADD_TRACK': {
+        const newId = addTrack();
+        if (action.instrument) {
+          const inst = action.instrument as InstrumentType;
+          setTracks(prev => prev.map(t =>
+            t.id === newId ? { ...t, instrument: inst, name: `${inst} (Track ${newId})` } : t
+          ));
+        }
+        break;
+      }
+      case 'SET_BPM': {
+        if (action.value && action.value >= 60 && action.value <= 200) {
+          setBpm(action.value);
+        }
+        break;
+      }
+      case 'CHANGE_INSTRUMENT': {
+        if (action.instrument) {
+          handleInstrumentChange(action.instrument as InstrumentType);
+        }
+        break;
+      }
+      case 'TRANSPORT': {
+        if (action.command === 'play' && !isPlaying) {
+          handlePlayToggle();
+        } else if (action.command === 'stop') {
+          handleStop();
+        } else if (action.command === 'record' && !isRecording) {
+          handleRecordToggle();
+        } else if (action.command === 'pause' && isPlaying) {
+          handlePlayToggle();
+        }
+        break;
+      }
+    }
+  }, [addTrack, handleInstrumentChange, handlePlayToggle, handleStop, handleRecordToggle, isPlaying, isRecording]);
+
   // Calculate project stats
   const trackCount = tracks.filter(t => t.id !== '1' && t.audioUrl).length;
   const totalDuration = Math.max(...tracks.map(t => t.audioDuration || 0), 0);
@@ -1056,7 +1100,23 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
         currentAvgLevel={currentAvgLevel}
       />
 
-      <Chatbot width={chatbotWidth} onWidthChange={setChatbotWidth} />
+      <Chatbot
+        width={chatbotWidth}
+        onWidthChange={setChatbotWidth}
+        projectContext={{
+          bpm,
+          isPlaying,
+          isRecording,
+          selectedInstrument,
+          tracks: tracks.map(t => ({
+            id: t.id,
+            name: t.name,
+            instrument: t.instrument,
+            isMuted: t.isMuted,
+          })),
+        }}
+        onAction={handleChatAction}
+      />
     </div>
   );
 };

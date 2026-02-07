@@ -1,72 +1,41 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Send, Bot, User } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { MessageCircle, X, Send, Bot, User, Mic, MicOff, Trash2 } from 'lucide-react';
+import { sendChatMessage, sendVoiceMessage, clearChatHistory, ChatAction, ProjectContext } from '../api';
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  transcription?: string; // For voice messages, shows what was heard
 }
 
 interface ChatbotProps {
   width?: number;
   onWidthChange?: (width: number) => void;
+  projectContext?: ProjectContext;
+  onAction?: (action: ChatAction) => void;
 }
 
-// OpenRouter API configuration
-const OPENROUTER_API_KEY = import.meta.env.VITE_OPENROUTER_API_KEY || '';
-const OPENROUTER_MODEL = import.meta.env.VITE_OPENROUTER_MODEL || 'google/gemini-pro'; // Default to Gemini via OpenRouter
-
-// Lazy load OpenRouter SDK to prevent app crash if SDK is not available
-let OpenRouterSDK: any = null;
-let openRouterClient: any = null;
-
-const getOpenRouterClient = async () => {
-  if (!OPENROUTER_API_KEY) {
-    return null;
-  }
-  
-  if (openRouterClient) {
-    return openRouterClient;
-  }
-
-  try {
-    // Dynamically import OpenRouter SDK
-    if (!OpenRouterSDK) {
-      OpenRouterSDK = (await import('@openrouter/sdk')).default;
-    }
-    
-    openRouterClient = new OpenRouterSDK({
-      apiKey: OPENROUTER_API_KEY,
-      defaultHeaders: {
-        'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : '',
-        'X-Title': 'Sinatra Music App',
-      },
-    });
-    
-    return openRouterClient;
-  } catch (error) {
-    console.error('Failed to initialize OpenRouter SDK:', error);
-    return null;
-  }
-};
-
-export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) => {
+export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, projectContext, onAction }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
       role: 'assistant',
-      content: 'Hello! I\'m your AI assistant for Sinatra. I can help you with music production, answer questions about the app, or assist with your creative process. What would you like to know?',
+      content: 'Hello! I\'m your AI music assistant for Sinatra. I can help with music production, suggest instruments, explain music theory, or control the DAW with voice commands. Try saying "add a piano track" or "set BPM to 140"!',
       timestamp: new Date(),
     },
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isResizingRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -83,6 +52,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
     }
   }, [input]);
 
+  // ---- Resize handling ----
   const handleMouseDown = (e: React.MouseEvent) => {
     if (resizeRef.current && e.target === resizeRef.current) {
       isResizingRef.current = true;
@@ -106,20 +76,17 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
     document.removeEventListener('mouseup', handleMouseUp);
   };
 
+  // ---- Process actions from AI response ----
+  const processActions = useCallback((actions: ChatAction[]) => {
+    if (!onAction || !actions.length) return;
+    for (const action of actions) {
+      onAction(action);
+    }
+  }, [onAction]);
+
+  // ---- Send text message ----
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
-
-    // Check if OpenRouter API key is configured
-    if (!OPENROUTER_API_KEY) {
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'OpenRouter API key not configured. Please set VITE_OPENROUTER_API_KEY in your .env file.',
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, errorMessage]);
-      return;
-    }
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -128,82 +95,164 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
       timestamp: new Date(),
     };
 
-    const userInput = input.trim();
     setInput('');
     setIsLoading(true);
-
-    // Add user message to state and get updated messages
-    let updatedMessages: Message[] = [];
-    setMessages(prev => {
-      updatedMessages = [...prev, userMessage];
-      return updatedMessages;
-    });
+    setMessages(prev => [...prev, userMessage]);
 
     try {
-      // Get OpenRouter client (lazy loaded)
-      const openRouter = await getOpenRouterClient();
-      
-      if (!openRouter) {
-        throw new Error('Failed to initialize OpenRouter client. Please check your API key and ensure @openrouter/sdk is installed.');
-      }
-
-      // Convert messages to OpenRouter format (exclude initial greeting)
-      const conversationMessages = updatedMessages
-        .filter(m => m.id !== '1') // Exclude initial greeting
-        .map(m => ({
-          role: m.role === 'user' ? 'user' : 'assistant',
-          content: m.content,
-        }));
-
-      // Call OpenRouter API using SDK
-      const completion = await openRouter.chat.send({
-        model: OPENROUTER_MODEL,
-        messages: conversationMessages,
-        stream: false,
-        temperature: 0.7,
-        max_tokens: 1024,
-      });
-
-      const text = completion.choices[0]?.message?.content || 'No response generated.';
+      const result = await sendChatMessage(userMessage.content, projectContext);
 
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: text,
+        content: result.response,
         timestamp: new Date(),
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+      processActions(result.actions);
     } catch (error: any) {
-      console.error('Error calling OpenRouter API:', error);
-      const errorDetails = error?.message || error?.toString() || 'Unknown error';
-      console.error('Error details:', errorDetails);
-      console.error('Full error object:', error);
-      
-      // Check for common API errors
-      let userFriendlyMessage = 'Sorry, I encountered an error processing your request.';
-      if (errorDetails.includes('API') || errorDetails.includes('key') || errorDetails.includes('401')) {
-        userFriendlyMessage = 'API key error. Please check your OpenRouter API key configuration.';
-      } else if (errorDetails.includes('quota') || errorDetails.includes('limit') || errorDetails.includes('429')) {
-        userFriendlyMessage = 'API quota exceeded. Please check your OpenRouter usage limits.';
-      } else if (errorDetails.includes('permission') || errorDetails.includes('access') || errorDetails.includes('403')) {
-        userFriendlyMessage = 'Permission denied. Please check your API key permissions.';
-      } else if (errorDetails.includes('model')) {
-        userFriendlyMessage = 'Model error. Please check your OpenRouter model configuration.';
-      } else if (errorDetails.includes('Failed to initialize') || errorDetails.includes('import')) {
-        userFriendlyMessage = 'OpenRouter SDK not available. Please run: npm install @openrouter/sdk';
-      }
-      
+      console.error('Chat error:', error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: userFriendlyMessage + ' Please check the browser console for more details.',
+        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}. Make sure the backend is running and GEMINI_API_KEY is set.`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // ---- Voice recording ----
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm',
+      });
+
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+        if (audioBlob.size === 0) {
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: 'No audio was captured. Please check your microphone.',
+            timestamp: new Date(),
+          }]);
+          return;
+        }
+
+        // Add a placeholder user message
+        const placeholderMsg: Message = {
+          id: Date.now().toString(),
+          role: 'user',
+          content: '🎤 Voice message...',
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, placeholderMsg]);
+        setIsLoading(true);
+
+        try {
+          const result = await sendVoiceMessage(audioBlob, projectContext);
+
+          // Update user message with transcription
+          const transcribedContent = result.transcription
+            ? `🎤 "${result.transcription}"`
+            : '🎤 (could not transcribe)';
+
+          setMessages(prev => prev.map(m =>
+            m.id === placeholderMsg.id
+              ? { ...m, content: transcribedContent, transcription: result.transcription }
+              : m
+          ));
+
+          // Add assistant response
+          const assistantMessage: Message = {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: result.response,
+            timestamp: new Date(),
+          };
+
+          setMessages(prev => [...prev, assistantMessage]);
+          processActions(result.actions);
+        } catch (error: any) {
+          console.error('Voice chat error:', error);
+          setMessages(prev => prev.map(m =>
+            m.id === placeholderMsg.id
+              ? { ...m, content: '🎤 (voice message failed)' }
+              : m
+          ));
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `Voice processing error: ${error?.message || 'Unknown error'}. Make sure the backend is running with gradio_client installed.`,
+            timestamp: new Date(),
+          }]);
+        } finally {
+          setIsLoading(false);
+        }
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecordingVoice(true);
+    } catch (error: any) {
+      console.error('Microphone error:', error);
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Could not access your microphone. Please check your browser permissions.',
+        timestamp: new Date(),
+      }]);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      mediaRecorderRef.current.stop();
+    }
+    setIsRecordingVoice(false);
+  };
+
+  const handleVoiceToggle = () => {
+    if (isRecordingVoice) {
+      stopVoiceRecording();
+    } else {
+      startVoiceRecording();
+    }
+  };
+
+  // ---- Clear chat ----
+  const handleClearChat = async () => {
+    try {
+      await clearChatHistory();
+    } catch (e) {
+      // Ignore backend errors for clear
+    }
+    setMessages([{
+      id: '1',
+      role: 'assistant',
+      content: 'Chat cleared! How can I help you with your music?',
+      timestamp: new Date(),
+    }]);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -213,6 +262,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
     }
   };
 
+  // ---- Collapsed state (floating button) ----
   if (!isOpen) {
     return (
       <button
@@ -225,6 +275,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
     );
   }
 
+  // ---- Expanded chat panel ----
   return (
     <>
       <div
@@ -244,14 +295,24 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
           <div className="flex items-center gap-2">
             <Bot size={16} className="text-[#c9a961]" />
             <span className="text-sm font-medium text-zinc-300">AI Assistant</span>
+            <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">Gemini</span>
           </div>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="text-zinc-500 hover:text-zinc-300 transition-colors"
-            title="Close chat"
-          >
-            <X size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleClearChat}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              title="Clear chat"
+            >
+              <Trash2 size={14} />
+            </button>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-zinc-500 hover:text-zinc-300 transition-colors"
+              title="Close chat"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
@@ -302,9 +363,29 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Voice recording indicator */}
+        {isRecordingVoice && (
+          <div className="px-4 py-2 bg-red-950/30 border-t border-red-900/30 flex items-center gap-2 shrink-0">
+            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+            <span className="text-xs text-red-400">Recording... Click mic to stop</span>
+          </div>
+        )}
+
         {/* Input */}
         <div className="border-t border-zinc-800 p-4 shrink-0">
           <div className="flex gap-2">
+            <button
+              onClick={handleVoiceToggle}
+              disabled={isLoading}
+              className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-center ${
+                isRecordingVoice
+                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 animate-pulse'
+                  : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              title={isRecordingVoice ? 'Stop recording' : 'Start voice input'}
+            >
+              {isRecordingVoice ? <MicOff size={16} /> : <Mic size={16} />}
+            </button>
             <textarea
               ref={textareaRef}
               value={input}
@@ -314,10 +395,11 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
               className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-700 resize-none overflow-y-auto"
               rows={1}
               style={{ minHeight: '40px', maxHeight: '120px' }}
+              disabled={isRecordingVoice}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isLoading}
+              disabled={!input.trim() || isLoading || isRecordingVoice}
               className="px-4 py-2 bg-[#c9a961]/20 hover:bg-[#c9a961]/30 text-[#c9a961] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               title="Send message"
             >
@@ -325,7 +407,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange }) 
             </button>
           </div>
           <div className="text-[10px] text-zinc-600 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line
+            Press Enter to send, Shift+Enter for new line • Click 🎤 for voice
           </div>
         </div>
       </div>

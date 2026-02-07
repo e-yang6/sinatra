@@ -12,13 +12,23 @@ import sys
 # Ensure the backend directory is on the path so local imports work
 sys.path.insert(0, os.path.dirname(__file__))
 
+# Load .env file BEFORE any service imports so env vars are available
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from typing import Optional
 
 from services.bpm import detect_bpm
 from services.transcription import vocal_to_midi
 from services.synth import render_midi_to_wav
+from services.chat import chat as gemini_chat, clear_history as clear_chat_history
 from utils.file_helpers import save_upload, validate_wav, cleanup_file, UPLOAD_DIR
 
 # Verify Basic Pitch is available at startup
@@ -270,3 +280,119 @@ async def download_midi():
         media_type="audio/midi",
         filename="sinatra_vocal.mid",
     )
+
+
+# ==================== CHAT ENDPOINTS ====================
+
+
+class ChatRequest(BaseModel):
+    message: str
+    context: Optional[dict] = None
+
+
+@app.post("/chat")
+async def chat_endpoint(request: ChatRequest):
+    """
+    Send a text message to the AI assistant.
+    Includes project context for relevant suggestions.
+    Returns the AI response and any detected actions.
+    """
+    if not request.message.strip():
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+    
+    result = gemini_chat(request.message, request.context)
+    return result
+
+
+@app.post("/chat/voice")
+async def chat_voice_endpoint(
+    file: UploadFile = File(...),
+    context: str = Form(default="{}"),
+):
+    """
+    Send a voice recording to the AI assistant.
+    Transcribes the audio using Gradio (Whisper), then processes through Gemini.
+    Returns the transcription, AI response, and any detected actions.
+    """
+    import json as json_module
+    import tempfile
+    
+    # Parse context
+    try:
+        ctx = json_module.loads(context) if context else {}
+    except json_module.JSONDecodeError:
+        ctx = {}
+    
+    # Save uploaded audio to a temp file
+    suffix = ".wav" if file.filename and file.filename.lower().endswith(".wav") else ".webm"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        content = await file.read()
+        tmp.write(content)
+        tmp_path = tmp.name
+    
+    try:
+        # Transcribe using Gradio client (Whisper)
+        transcription = await _transcribe_audio(tmp_path)
+        
+        if not transcription or not transcription.strip():
+            return {
+                "transcription": "",
+                "response": "I couldn't understand the audio. Please try again or type your message.",
+                "actions": [],
+            }
+        
+        # Send transcription through Gemini chat
+        result = gemini_chat(transcription, ctx)
+        result["transcription"] = transcription
+        return result
+    
+    except Exception as e:
+        return {
+            "transcription": "",
+            "response": f"Voice processing error: {str(e)}",
+            "actions": [],
+        }
+    finally:
+        # Clean up temp file
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+
+async def _transcribe_audio(audio_path: str) -> str:
+    """Transcribe audio using Gradio client (Whisper on HuggingFace Spaces)."""
+    try:
+        from gradio_client import Client
+    except ImportError:
+        raise RuntimeError(
+            "gradio_client is not installed. Run: pip install gradio_client"
+        )
+    
+    try:
+        # Connect to Whisper on HuggingFace Spaces
+        client = Client("openai/whisper", verbose=False)
+        result = client.predict(
+            audio=audio_path,
+            task="transcribe",
+            api_name="/predict",
+        )
+        
+        # Result is the transcription text
+        if isinstance(result, str):
+            return result.strip()
+        elif isinstance(result, (list, tuple)) and len(result) > 0:
+            return str(result[0]).strip()
+        else:
+            return str(result).strip()
+    
+    except Exception as e:
+        print(f"[Transcription] Gradio/Whisper error: {e}")
+        raise RuntimeError(f"Speech-to-text failed: {str(e)}")
+
+
+@app.post("/chat/clear")
+async def chat_clear_endpoint():
+    """Clear the chat conversation history."""
+    clear_chat_history()
+    return {"status": "ok", "message": "Chat history cleared."}

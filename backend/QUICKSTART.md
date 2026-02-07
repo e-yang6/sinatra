@@ -40,6 +40,9 @@ pip install -r requirements.txt
 # Set SoundFont path (replace with your actual path)
 $env:SOUNDFONT_PATH="C:\soundfonts\FluidR3_GM.sf2"
 
+# Chatbot
+pip install google-genai gradio_client python-dotenv
+
 # Start server
 uvicorn main:app --reload --port 8000
 ```
