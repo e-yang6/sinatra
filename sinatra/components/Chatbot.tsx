@@ -117,7 +117,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}. Make sure the backend is running and GEMINI_API_KEY is set.`,
+        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}. Make sure the backend is running and OPENROUTER_API_KEY is set.`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -296,7 +296,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           <div className="flex items-center gap-2">
             <Bot size={16} className="text-[#c9a961]" />
             <span className="text-sm font-medium text-zinc-300">Frank</span>
-            <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">Gemini</span>
+            <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">OpenRouter</span>
           </div>
           <div className="flex items-center gap-2">
             <button

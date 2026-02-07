@@ -42,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-3">
         <button
           onClick={() => navigate('/projects')}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded text-xs text-zinc-300 hover:text-zinc-200 transition-colors"
+          className="flex items-center gap-1.5 px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-zinc-600 rounded text-xs text-zinc-300 hover:text-zinc-200 transition-colors"
         >
           <ArrowLeft size={12} />
           Back
@@ -126,7 +126,7 @@ export const Header: React.FC<HeaderProps> = ({
         {onExport && (
           <button
             onClick={onExport}
-            className="h-8 border border-zinc-800 rounded px-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2"
+            className="px-2 py-1 border border-zinc-800 rounded text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2"
           >
             <Download size={12} />
             Export
