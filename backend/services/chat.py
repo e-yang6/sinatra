@@ -10,7 +10,7 @@ import httpx
 from typing import Optional
 
 # --- Configuration ---
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "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")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
 OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
 

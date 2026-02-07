@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '../components/ui/button';
 import { AnimatedGroup } from '../components/ui/animated-group';
+import { VideoPlayer } from '../components/VideoPlayer';
 import { cn } from '../lib/utils';
 
 const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
@@ -307,70 +308,8 @@ export const HeroPage: React.FC = () => {
                   className="bg-gradient-to-b to-zinc-950 absolute inset-0 z-10 from-transparent from-35%"
                 />
                 <div className="inset-shadow-2xs ring-zinc-800 bg-zinc-950 relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-zinc-800 p-4 shadow-lg shadow-zinc-950/15 ring-1">
-                  {/* Mock Editor Demo */}
-                  <div className="aspect-15/8 relative rounded-2xl bg-zinc-900 overflow-hidden">
-                    {/* Editor Header */}
-                    <div className="h-12 border-b border-zinc-800 flex items-center justify-between px-4 bg-zinc-900">
-                      <div className="flex items-center gap-3">
-                        <div className="w-6 h-6 rounded-full border border-zinc-700 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-zinc-500 rounded-full" />
-                        </div>
-                        <div className="w-6 h-6 rounded-full border border-zinc-700 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-zinc-500 rounded-full" />
-                        </div>
-                        <div className="w-6 h-6 rounded-full border border-zinc-700 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-zinc-500 rounded-full" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-zinc-500 font-mono">BPM</span>
-                          <span className="text-xs text-zinc-300 font-mono">124</span>
-                        </div>
-                        <div className="w-16 h-0.5 bg-zinc-800 rounded">
-                          <div className="w-3/4 h-full bg-[#c9a961] rounded" />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Timeline Area */}
-                    <div className="flex-1 bg-zinc-950 p-4 h-[calc(100%-3rem)]">
-                      {/* Time Ruler */}
-                      <div className="h-8 border-b border-zinc-800 flex items-end px-32 mb-2">
-                        {[0, 4, 8, 12, 16, 20, 24].map((sec) => (
-                          <div key={sec} className="flex-1 flex flex-col items-start">
-                            <div className="h-2 w-px bg-[#c9a961]/50" />
-                            <span className="text-[10px] text-[#c9a961]/70 font-mono mt-1">{sec}s</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Tracks */}
-                      <div className="space-y-2 relative">
-                        {['Drum Loop', 'Piano', 'Bass', 'Synth'].map((name, idx) => (
-                          <div key={name} className="h-12 bg-zinc-900 border border-zinc-800 rounded flex items-center px-2">
-                            <div className="w-24 text-xs text-zinc-400 truncate">{name}</div>
-                            <div className="flex-1 h-full relative">
-                              <div className="absolute inset-0 flex items-center">
-                                <div
-                                  className="h-6 bg-gradient-to-r from-[#c9a961]/40 via-[#c9a961]/60 to-[#c9a961]/40 rounded"
-                                  style={{
-                                    width: `${60 + idx * 10}%`,
-                                    marginLeft: `${10 + idx * 5}%`,
-                                  }}
-                                />
-                              </div>
-                              <div className="absolute left-[20%] top-0 bottom-0 w-px bg-[#c9a961]/70" />
-                            </div>
-                          </div>
-                        ))}
-                        {/* Playhead */}
-                        <div className="absolute top-0 bottom-0 w-px bg-[#c9a961]" style={{ left: '35%' }}>
-                          <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-[#c9a961] rounded-sm" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                  {/* Video Player Demo */}
+                  <VideoPlayer src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" />
                 </div>
               </div>
             </AnimatedGroup>

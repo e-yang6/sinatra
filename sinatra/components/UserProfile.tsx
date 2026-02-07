@@ -19,7 +19,7 @@ export const UserProfile: React.FC = () => {
       <>
         <button
           onClick={() => setShowAuthModal(true)}
-          className="px-3 py-1.5 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-300 transition-colors"
+          className="px-2 py-1 text-xs bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-zinc-300 transition-colors"
         >
           Sign In
         </button>
@@ -32,7 +32,7 @@ export const UserProfile: React.FC = () => {
     <div className="relative">
       <button
         onClick={() => setShowDropdown(!showDropdown)}
-        className="flex items-center gap-2 px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-300 transition-colors"
+        className="flex items-center gap-2 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded text-xs text-zinc-300 transition-colors"
       >
         <div className="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center">
           <User size={14} />
@@ -44,10 +44,10 @@ export const UserProfile: React.FC = () => {
       {showDropdown && (
         <>
           <div
-            className="fixed inset-0 z-10"
+            className="fixed inset-0 z-[9998]"
             onClick={() => setShowDropdown(false)}
           />
-          <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded shadow-lg z-20">
+          <div className="absolute right-0 top-full mt-2 w-48 bg-zinc-900 border border-zinc-800 rounded shadow-lg z-[9999]">
             <div className="p-3 border-b border-zinc-800">
               <div className="text-xs text-zinc-400">Signed in as</div>
               <div className="text-xs text-zinc-200 truncate mt-1">{user.email}</div>
