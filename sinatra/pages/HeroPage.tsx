@@ -12,17 +12,17 @@ const transitionVariants = {
   item: {
     hidden: {
       opacity: 0,
-      filter: 'blur(12px)',
-      y: 12,
+      y: 20,
     },
     visible: {
       opacity: 1,
-      filter: 'blur(0px)',
       y: 0,
       transition: {
         type: 'spring',
-        bounce: 0.3,
-        duration: 1.5,
+        stiffness: 100,
+        damping: 20,
+        mass: 0.5,
+        duration: 0.8,
       },
     },
   },
@@ -38,15 +38,24 @@ const menuItems = [
 const HeroHeader: React.FC = () => {
   const [menuState, setMenuState] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const { user } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
+    // Animate from compressed to stretched on initial load
+    const timer = setTimeout(() => {
+      setIsInitialLoad(false);
+    }, 50);
+
     const handleScroll = () => {
       setIsScrolled(window.scrollY > 50);
     };
     window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   return (
@@ -55,8 +64,12 @@ const HeroHeader: React.FC = () => {
         data-state={menuState ? 'active' : undefined}
         className="fixed z-20 w-full px-2 group bg-zinc-950/0">
         <div className={cn(
-          'mx-auto mt-2 max-w-6xl px-6 transition-[max-width,padding,background-color,border-color] duration-300 lg:px-12 border border-transparent rounded-2xl',
-          isScrolled && 'bg-zinc-950/50 max-w-4xl border-zinc-800 backdrop-blur-lg lg:px-5'
+          'mx-auto mt-2 px-6 border rounded-2xl transition-[max-width,padding,background-color,border-color,backdrop-filter] duration-700 ease-out',
+          isInitialLoad 
+            ? 'max-w-4xl bg-zinc-950/50 border-zinc-800 backdrop-blur-lg lg:px-5'
+            : isScrolled
+              ? 'max-w-4xl bg-zinc-950/50 border-zinc-800 backdrop-blur-lg lg:px-5'
+              : 'max-w-6xl border-transparent lg:px-12'
         )}>
           <div className="relative flex flex-wrap items-center justify-between gap-6 py-3 lg:gap-0 lg:py-4">
             <div className="flex w-full justify-between lg:w-auto">
@@ -179,7 +192,7 @@ export const HeroPage: React.FC = () => {
   return (
     <>
       <HeroHeader />
-      <main className="overflow-hidden">
+      <main className="overflow-hidden" style={{ willChange: 'transform, opacity' }}>
         <div
           aria-hidden
           className="z-[2] absolute inset-0 pointer-events-none isolate opacity-50 contain-strict hidden lg:block">
@@ -194,22 +207,23 @@ export const HeroPage: React.FC = () => {
                 container: {
                   visible: {
                     transition: {
-                      delayChildren: 1,
+                      delayChildren: 0.3,
+                      staggerChildren: 0.1,
                     },
                   },
                 },
                 item: {
                   hidden: {
                     opacity: 0,
-                    y: 20,
                   },
                   visible: {
                     opacity: 1,
-                    y: 0,
                     transition: {
                       type: 'spring',
-                      bounce: 0.3,
-                      duration: 2,
+                      stiffness: 120,
+                      damping: 25,
+                      mass: 0.5,
+                      duration: 0.6,
                     },
                   },
                 },
@@ -220,7 +234,18 @@ export const HeroPage: React.FC = () => {
             <div aria-hidden className="absolute inset-0 -z-10 size-full [background:radial-gradient(125%_125%_at_50%_100%,transparent_0%,rgb(9_9_11)_75%)]" />
             <div className="mx-auto max-w-7xl px-6">
               <div className="text-center sm:mx-auto lg:mr-auto lg:mt-0">
-                <AnimatedGroup variants={transitionVariants}>
+                <AnimatedGroup 
+                  variants={{
+                    container: {
+                      visible: {
+                        transition: {
+                          staggerChildren: 0.15,
+                          delayChildren: 0.2,
+                        },
+                      },
+                    },
+                    ...transitionVariants,
+                  }}>
                   <h1 className="mt-8 max-w-4xl mx-auto text-balance text-6xl md:text-7xl lg:mt-16 xl:text-[5.25rem] font-light text-zinc-100">
                     Modern Solutions for Music Production
                   </h1>
@@ -234,8 +259,8 @@ export const HeroPage: React.FC = () => {
                     container: {
                       visible: {
                         transition: {
-                          staggerChildren: 0.05,
-                          delayChildren: 0.75,
+                          staggerChildren: 0.08,
+                          delayChildren: 0.4,
                         },
                       },
                     },
@@ -269,8 +294,8 @@ export const HeroPage: React.FC = () => {
                 container: {
                   visible: {
                     transition: {
-                      staggerChildren: 0.05,
-                      delayChildren: 0.75,
+                      staggerChildren: 0.08,
+                      delayChildren: 0.5,
                     },
                   },
                 },

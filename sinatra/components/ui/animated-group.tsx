@@ -154,9 +154,14 @@ export function AnimatedGroup({
       animate='visible'
       variants={containerVariants}
       className={cn(className)}
+      style={{ willChange: 'transform, opacity' }}
     >
       {React.Children.map(children, (child, index) => (
-        <motion.div key={index} variants={itemVariants}>
+        <motion.div 
+          key={index} 
+          variants={itemVariants}
+          style={{ willChange: 'transform, opacity' }}
+        >
           {child}
         </motion.div>
       ))}
