@@ -29,7 +29,7 @@ interface SignInPageProps {
 // --- SUB-COMPONENTS ---
 
 const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
-  <div className="rounded-2xl border border-slate-300 bg-slate-50/50 backdrop-blur-sm transition-colors focus-within:border-[#3b82f6]/70 focus-within:bg-[#3b82f6]/10">
+  <div className="rounded-2xl border border-slate-300 bg-slate-50/50 backdrop-blur-sm transition-colors focus-within:border-[#6993cf]/70 focus-within:bg-[#6993cf]/10">
     {children}
   </div>
 );
@@ -80,14 +80,14 @@ export const SignInPage: React.FC<SignInPageProps> = ({
               {!isSignUp && (
                 <div className="flex items-center justify-between text-sm">
                   <label className="flex items-center gap-3 cursor-pointer">
-                    <input type="checkbox" name="rememberMe" className="w-4 h-4 rounded border-slate-300 bg-white text-[#3b82f6] focus:ring-[#3b82f6] focus:ring-offset-white" />
+                    <input type="checkbox" name="rememberMe" className="w-4 h-4 rounded border-slate-300 bg-white text-[#6993cf] focus:ring-[#6993cf] focus:ring-offset-white" />
                     <span className="text-slate-700">Keep me signed in</span>
                   </label>
-                  <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-[#3b82f6] transition-colors">Reset password</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); onResetPassword?.(); }} className="hover:underline text-[#6993cf] transition-colors">Reset password</a>
                 </div>
               )}
 
-              <button type="submit" className="w-full rounded-2xl bg-[#3b82f6] py-4 font-medium text-white hover:bg-[#2563eb] transition-colors">
+              <button type="submit" className="w-full rounded-2xl bg-[#6993cf] py-4 font-medium text-white hover:bg-[#5476a6] transition-colors">
                 {isSignUp ? 'Sign Up' : 'Sign In'}
               </button>
             </form>
@@ -104,7 +104,7 @@ export const SignInPage: React.FC<SignInPageProps> = ({
 
             <p className="text-center text-sm text-slate-600">
               {isSignUp ? 'Already have an account? ' : 'New to our platform? '}
-              <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-[#3b82f6] hover:underline transition-colors">
+              <a href="#" onClick={(e) => { e.preventDefault(); onCreateAccount?.(); }} className="text-[#6993cf] hover:underline transition-colors">
                 {isSignUp ? 'Sign In' : 'Create Account'}
               </a>
             </p>
@@ -135,8 +135,8 @@ export const SignInPage: React.FC<SignInPageProps> = ({
                 loop={true}
                 showCursor={true}
                 cursorChar="|"
-                wordClassName="text-[#3b82f6]"
-                cursorClassName="ml-0.5 text-[#3b82f6] font-light"
+                wordClassName="text-[#6993cf]"
+                cursorClassName="ml-0.5 text-[#6993cf] font-light"
                 className="inline"
               />
             </h2>

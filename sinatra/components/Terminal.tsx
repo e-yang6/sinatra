@@ -106,9 +106,9 @@ export const Terminal: React.FC<TerminalProps> = ({
           let colorClass = 'bg-zinc-600';
           
           if (scaledLevel > 0.8) {
-            colorClass = freqPosition < 0.3 ? 'bg-blue-500' : freqPosition < 0.6 ? 'bg-green-500' : 'bg-yellow-500';
+            colorClass = freqPosition < 0.3 ? 'bg-[#6993cf]' : freqPosition < 0.6 ? 'bg-green-500' : 'bg-yellow-500';
           } else if (scaledLevel > 0.5) {
-            colorClass = freqPosition < 0.3 ? 'bg-blue-600' : freqPosition < 0.6 ? 'bg-green-600' : 'bg-yellow-600';
+            colorClass = freqPosition < 0.3 ? 'bg-[#5476a6]' : freqPosition < 0.6 ? 'bg-green-600' : 'bg-yellow-600';
           } else if (scaledLevel > 0.2) {
             colorClass = 'bg-zinc-500';
           }

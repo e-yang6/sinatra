@@ -51,7 +51,7 @@ export const Feature72 = ({
 }: Feature72Props) => {
   return (
     <section className="pt-24 pb-32">
-      <div className="mx-auto max-w-7xl px-6 flex flex-col gap-16">
+      <div className="mx-auto max-w-7xl px-6 flex flex-col gap-10">
         <div className="lg:max-w-2xl">
           <h2 className="mb-3 text-xl font-light text-slate-900 md:mb-4 md:text-4xl lg:mb-6 tracking-tighter">
             {heading}
@@ -62,7 +62,7 @@ export const Feature72 = ({
           {features.map((feature) => (
             <div
               key={feature.id}
-              className="flex flex-col overflow-clip rounded-xl border border-slate-300 bg-slate-50 hover:border-[#3b82f6]/30 transition-all duration-300"
+              className="flex flex-col overflow-clip rounded-xl border border-slate-300 bg-slate-50 hover:border-[#6993cf]/30 transition-all duration-300"
             >
               <div>
                 <img

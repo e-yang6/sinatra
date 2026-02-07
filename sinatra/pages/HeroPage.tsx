@@ -17,7 +17,7 @@ import { Feature72 } from '../components/Feature72';
 import { Footer } from '../components/Footer';
 import { Github, Twitter, Instagram, Linkedin } from 'lucide-react';
 
-const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
+const sinatraLogo = new URL('../assets/sinalogo.png', import.meta.url).href;
 const earlyDemoVideo = new URL('../assets/Demo.mp4', import.meta.url).href;
 
 const transitionVariants = {
@@ -139,18 +139,18 @@ const HeroHeader: React.FC = () => {
                 </ul>
               </div>
               <div className="flex w-full flex-col space-y-3 sm:flex-row sm:gap-3 sm:space-y-0 md:w-fit">
-                <Button
-                  size="sm"
-                  className="bg-[#3b82f6] hover:bg-[#2563eb] text-white"
-                  onClick={() => {
-                    if (user) {
-                      navigate('/projects');
-                    } else {
-                      navigate('/signup');
-                    }
-                  }}>
-                  <span>Start Building</span>
-                </Button>
+                 <Button
+                   size="sm"
+                   className="bg-[#6993cf] hover:bg-[#5476a6] text-white px-7 py-5"
+                   onClick={() => {
+                     if (user) {
+                       navigate('/projects');
+                     } else {
+                       navigate('/signup');
+                     }
+                   }}>
+                   <span>Start Building</span>
+                 </Button>
               </div>
             </div>
           </div>
@@ -228,7 +228,7 @@ const ArtistsCarousel: React.FC = () => {
             <CarouselContent className="-ml-2 md:-ml-4">
               {duplicatedLogos.map((logoSrc, index) => (
                 <CarouselItem className="pl-2 md:pl-4 basis-1/4 lg:basis-1/6" key={index}>
-                  <div className="flex rounded-xl aspect-square bg-slate-100 border border-slate-300 items-center justify-center p-2 hover:border-[#3b82f6]/50 hover:bg-slate-200 transition-all duration-300 overflow-hidden">
+                  <div className="flex rounded-xl aspect-square bg-slate-100 border border-slate-300 items-center justify-center p-2 hover:border-[#6993cf]/50 hover:bg-slate-200 transition-all duration-300 overflow-hidden">
                     <img 
                       src={logoSrc} 
                       alt={`Artist logo ${index + 1}`}
@@ -330,11 +330,11 @@ export const HeroPage: React.FC = () => {
                         className="relative group inline-block cursor-pointer select-none"
                         style={{ perspective: 800 }}
                       >
-                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#3b82f6] via-[#60a5fa] to-[#3b82f6] transition-all duration-700 ease-out inline-block">
+                        <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#6993cf] via-[#8ba8d9] to-[#6993cf] transition-all duration-700 ease-out inline-block">
                           to the moon.
                         </span>
                         <span
-                          className="pointer-events-none absolute inset-0 rounded bg-gradient-to-r from-[#3b82f6]/0 via-[#60a5fa]/30 to-[#3b82f6]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-shimmer"
+                          className="pointer-events-none absolute inset-0 rounded bg-gradient-to-r from-[#6993cf]/0 via-[#8ba8d9]/30 to-[#6993cf]/0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 animate-shimmer"
                           style={{ mixBlendMode: 'overlay' }}
                         />
                       </span>
@@ -375,7 +375,7 @@ export const HeroPage: React.FC = () => {
 
           {/* Features Section */}
           <Feature72
-            heading="Powerful Features"
+            heading="Empowering Features"
             description="Discover the features that make Sinatra the perfect tool for music production."
             linkUrl="#"
             linkText="Explore features"

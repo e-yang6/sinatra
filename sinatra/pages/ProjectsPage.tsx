@@ -9,7 +9,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 
-const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
+const sinatraLogo = new URL('../assets/sinalogo.png', import.meta.url).href;
 
 interface Project {
   id: string;

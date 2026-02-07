@@ -3,7 +3,7 @@ import { Play, Pause, Square, Mic, Volume2, Download, ArrowLeft } from 'lucide-r
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from './UserProfile';
 
-const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
+const sinatraLogo = new URL('../assets/sinalogo.png', import.meta.url).href;
 
 interface HeaderProps {
   isPlaying: boolean;

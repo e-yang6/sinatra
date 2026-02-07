@@ -48,7 +48,7 @@ export function Footer({
                 <Button
                   variant="secondary"
                   size="icon"
-                  className="h-10 w-10 rounded-full bg-slate-100 border border-slate-300 hover:border-[#3b82f6]/50 hover:bg-slate-200 text-slate-700 hover:text-[#3b82f6]"
+                  className="h-10 w-10 rounded-full bg-slate-100 border border-slate-300 hover:border-[#6993cf]/50 hover:bg-slate-200 text-slate-700 hover:text-[#6993cf]"
                   asChild
                 >
                   <a href={link.href} target="_blank" rel="noopener noreferrer" aria-label={link.label}>
@@ -66,7 +66,7 @@ export function Footer({
                 <li key={i} className="my-1 mx-2 shrink-0">
                   <a
                     href={link.href}
-                    className="text-sm text-slate-700 hover:text-[#3b82f6] underline-offset-4 hover:underline transition-colors"
+                    className="text-sm text-slate-700 hover:text-[#6993cf] underline-offset-4 hover:underline transition-colors"
                   >
                     {link.label}
                   </a>
