@@ -4,6 +4,7 @@ import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
 import { Chatbot } from './components/Chatbot';
+import VideoExportModal from './components/VideoExportModal';
 import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
 import { uploadDrum, uploadVocal, renderMidi, reRenderMidi, uploadSample, generateChords, ChatAction, ProjectContext } from './api';
 
@@ -113,6 +114,9 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
 
   // ---- Chatbot state ----
   const [chatbotWidth, setChatbotWidth] = useState(400);
+
+  // ---- Video export modal state ----
+  const [isVideoExportOpen, setIsVideoExportOpen] = useState(false);
 
   // ---- Undo/Redo state ----
   const [history, setHistory] = useState<TrackData[][]>([INITIAL_TRACKS]);
@@ -1203,37 +1207,10 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   }, [metronome, isPlaying, isRecording, bpm, startMetronome, stopMetronome]);
 
   // ==============================
-  //  EXPORT
+  //  EXPORT (opens the video/audio export modal)
   // ==============================
-  const handleExport = async () => {
-    try {
-      setStatusMessage('Exporting...');
-      // Find tracks with clips
-      const tracksWithClips = tracks.filter(t => t.clips && t.clips.length > 0);
-      if (tracksWithClips.length === 0) {
-        setError('No tracks to export');
-        return;
-      }
-
-      // Export first clip of first track (simplified)
-      const firstClip = tracksWithClips[0].clips![0];
-      if (firstClip?.audioUrl) {
-        const response = await fetch(firstClip.audioUrl);
-        const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `sinatra-export-${Date.now()}.wav`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        setStatusMessage('Export complete');
-      }
-    } catch (err) {
-      setError('Export failed');
-      setStatusMessage('Error');
-    }
+  const handleExport = () => {
+    setIsVideoExportOpen(true);
   };
 
   // ==============================
@@ -1469,6 +1446,16 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         recordingSessions={recordingSessions}
         currentPeakLevel={currentPeakLevel}
         currentAvgLevel={currentAvgLevel}
+      />
+
+      <VideoExportModal
+        isOpen={isVideoExportOpen}
+        onClose={() => setIsVideoExportOpen(false)}
+        tracks={tracks}
+        clipAudioMap={clipAudioMapRef.current}
+        drumAudioEl={drumAudioElRef.current}
+        bpm={bpm}
+        masterVolume={masterVolume}
       />
     </div>
   );
