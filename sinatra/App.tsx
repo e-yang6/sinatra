@@ -2,6 +2,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { SidebarLeft } from './components/SidebarLeft';
 import { Timeline } from './components/Timeline';
+import { Terminal } from './components/Terminal';
 import { InstrumentType, TrackData, Note } from './types';
 import { uploadDrum, uploadVocal, renderMidi } from './api';
 
@@ -71,6 +72,14 @@ const App: React.FC = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [error, setError] = useState<string | null>(null);
+  
+  // ---- Audio visualization state ----
+  const [audioLevels, setAudioLevels] = useState<number[]>([]);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  
+  // ---- Terminal state ----
+  const [terminalHeight, setTerminalHeight] = useState(96);
 
   // ---- Audio for playback ----
   const trackAudioMapRef = useRef<Map<string, HTMLAudioElement>>(new Map());
@@ -267,6 +276,12 @@ const App: React.FC = () => {
 
       const source = ctx.createMediaStreamSource(stream);
 
+      // Create analyser for real-time audio visualization
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      analyserRef.current = analyser;
+
       const highpass = ctx.createBiquadFilter();
       highpass.type = 'highpass';
       highpass.frequency.value = 60;
@@ -293,10 +308,35 @@ const App: React.FC = () => {
         recordedChunksRef.current.push(gated);
       };
 
-      source.connect(highpass);
+      // Connect audio nodes: source -> analyser -> filters -> processor -> destination
+      source.connect(analyser);
+      analyser.connect(highpass);
       highpass.connect(lowpass);
       lowpass.connect(processor);
       processor.connect(ctx.destination);
+
+      // Start audio level visualization
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const isRecordingRef = { current: true };
+      const updateLevels = () => {
+        if (!analyserRef.current || !isRecordingRef.current) {
+          animationFrameRef.current = null;
+          return;
+        }
+        analyserRef.current.getByteFrequencyData(dataArray);
+        // Convert to normalized levels (0-1) and take every 4th value for 40 bars
+        const levels: number[] = [];
+        for (let i = 0; i < 40; i++) {
+          const index = Math.floor((i / 40) * dataArray.length);
+          levels.push(dataArray[index] / 255);
+        }
+        setAudioLevels(levels);
+        animationFrameRef.current = requestAnimationFrame(updateLevels);
+      };
+      updateLevels();
+      
+      // Store ref for cleanup
+      (recordingTargetRef.current as any).isRecordingRef = isRecordingRef;
 
       // Recording always starts from 0
       setPlayheadSec(0);
@@ -339,6 +379,17 @@ const App: React.FC = () => {
     stopTransport();
     stopDrumPlayback();
     stopMetronome();
+
+    // Stop audio visualization
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+    if ((recordingTargetRef.current as any)?.isRecordingRef) {
+      (recordingTargetRef.current as any).isRecordingRef.current = false;
+    }
+    analyserRef.current = null;
+    setAudioLevels([]);
 
     // Stop all other tracks
     trackAudioMapRef.current.forEach(el => {
@@ -698,18 +749,12 @@ const App: React.FC = () => {
         />
       </div>
 
-      <div className="h-6 border-t border-zinc-800 px-4 flex items-center justify-between text-xs text-zinc-500">
-        <div>Sinatra</div>
-        <div className={
-          error ? 'text-red-400' :
-          isRecording ? 'text-red-400' :
-          isProcessing ? 'text-yellow-400' :
-          statusMessage !== 'Ready' ? 'text-zinc-300' :
-          'text-zinc-500'
-        }>
-          {error || statusMessage}
-        </div>
-      </div>
+      <Terminal 
+        isRecording={isRecording} 
+        audioLevels={audioLevels}
+        height={terminalHeight}
+        onHeightChange={setTerminalHeight}
+      />
     </div>
   );
 };

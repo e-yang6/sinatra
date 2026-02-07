@@ -71,13 +71,13 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
 
       <button
         onClick={onAddTrack}
-        className="h-8 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2 shrink-0"
+        className="h-8 border border-zinc-800 rounded px-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2 shrink-0"
       >
         <Plus size={14} />
         Add Track
       </button>
 
-      <div className="p-2 shrink-0">
+      <div className="border border-zinc-800 rounded p-2 shrink-0 flex flex-col items-center justify-center text-center min-h-[60px]">
         <label className="text-[10px] text-zinc-600">Selected Track</label>
         <p className="text-xs text-zinc-300 mt-1 truncate">{selectedTrackName}</p>
         {isDrumSelected && (
@@ -105,9 +105,9 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
           <button 
             onClick={onRecordStart}
             disabled={isRecording}
-            className={`h-12 flex flex-col items-center justify-center gap-1 transition-colors ${
+            className={`h-12 border border-zinc-800 rounded flex flex-col items-center justify-center gap-1 transition-colors ${
               isRecording 
-                ? 'text-red-400' 
+                ? 'text-red-400 border-red-500/30' 
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
