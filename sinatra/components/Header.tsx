@@ -1,5 +1,6 @@
 import React from 'react';
 import { Play, Pause, Square, Mic, Volume2, Download } from 'lucide-react';
+import { UserProfile } from './UserProfile';
 
 const sinatraLogo = new URL('../assets/SinAtraa-removebg-preview.png', import.meta.url).href;
 
@@ -95,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Right: Master Volume and Export */}
+      {/* Right: Master Volume, Export, and User Profile */}
       <div className="flex items-center gap-4">
         {onMasterVolumeChange && (
           <div className="flex items-center gap-2">
@@ -121,6 +122,7 @@ export const Header: React.FC<HeaderProps> = ({
             Export
           </button>
         )}
+        <UserProfile />
       </div>
     </div>
   );
