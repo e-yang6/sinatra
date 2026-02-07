@@ -811,6 +811,23 @@ const App: React.FC = () => {
 
   const handleUpdateTrack = (id: string, updates: Partial<TrackData>) => {
     setTracks(prev => {
+      // Handle mute/unmute with volume changes
+      if (updates.isMuted !== undefined) {
+        const currentTrack = prev.find(t => t.id === id);
+        if (currentTrack) {
+          if (updates.isMuted) {
+            // Muting: save current volume and set to 0
+            const unmutedVol = currentTrack.volume > 0 ? currentTrack.volume : (currentTrack.unmutedVolume ?? 0.8);
+            updates.volume = 0;
+            updates.unmutedVolume = unmutedVol;
+          } else {
+            // Unmuting: restore previous volume or default to 0.8
+            updates.volume = currentTrack.unmutedVolume ?? 0.8;
+            updates.unmutedVolume = undefined;
+          }
+        }
+      }
+      
       const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
       
       // Apply mute/unmute in real-time if playing
@@ -826,6 +843,7 @@ const App: React.FC = () => {
                 if (drumAudioElRef.current.duration) {
                   drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
                 }
+                drumAudioElRef.current.volume = track.volume * masterVolume;
                 drumAudioElRef.current.play().catch(() => {});
               }
             }
@@ -838,7 +856,7 @@ const App: React.FC = () => {
               } else if (isPlaying && el.src) {
                 if (el.duration && playheadSec < el.duration) {
                   el.currentTime = playheadSec;
-                  el.volume = track.volume;
+                  el.volume = track.volume * masterVolume;
                   el.play().catch(() => {});
                 }
               }
@@ -952,6 +970,9 @@ const App: React.FC = () => {
         onStop={handleStop}
         onBpmChange={setBpm}
         onMetronomeToggle={() => setMetronome(!metronome)}
+        masterVolume={masterVolume}
+        onMasterVolumeChange={setMasterVolume}
+        onExport={handleExport}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -964,10 +985,6 @@ const App: React.FC = () => {
           onAddTrack={addTrack}
           selectedTrackName={selectedTrack?.name || 'None'}
           isDrumSelected={selectedTrackId === '1'}
-          masterVolume={masterVolume}
-          onMasterVolumeChange={setMasterVolume}
-          onExport={handleExport}
-          trackCount={trackCount}
           totalDuration={totalDuration}
         />
 

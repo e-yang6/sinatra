@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Upload, Mic, ChevronDown, Volume2, Download } from 'lucide-react';
+import { Upload, ChevronDown, Search, Star, ChevronRight } from 'lucide-react';
 import { InstrumentType } from '../types';
 
 interface CustomSelectProps {
@@ -8,9 +8,46 @@ interface CustomSelectProps {
   options: string[];
 }
 
+interface InstrumentItem {
+  name: string;
+  category: 'Piano' | 'Strings' | 'Brass' | 'Woodwinds' | 'Synth' | 'Bass' | 'Guitar' | 'Other';
+  isFavorite: boolean;
+}
+
 const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const selectRef = useRef<HTMLDivElement>(null);
+
+  // Map instrument types to categories
+  const instrumentCategories: Record<string, InstrumentItem['category']> = {
+    'Piano': 'Piano',
+    'Electric Piano': 'Piano',
+    'Harpsichord': 'Piano',
+    'Strings': 'Strings',
+    'Violin': 'Strings',
+    'Cello': 'Strings',
+    'Trumpet': 'Brass',
+    'Trombone': 'Brass',
+    'French Horn': 'Brass',
+    'Flute': 'Woodwinds',
+    'Saxophone': 'Woodwinds',
+    'Clarinet': 'Woodwinds',
+    'Synth': 'Synth',
+    'Synth Pad': 'Synth',
+    'Synth Lead': 'Synth',
+    'Bass': 'Bass',
+    'Acoustic Bass': 'Bass',
+    'Guitar': 'Guitar',
+    'Electric Guitar': 'Guitar',
+    'Organ': 'Other',
+    'Raw Audio': 'Other',
+  };
+
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
+
+  const categories = ['All', 'Piano', 'Strings', 'Brass', 'Woodwinds', 'Synth', 'Bass', 'Guitar', 'Other'];
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -28,9 +65,38 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options })
     };
   }, [isOpen]);
 
+  const toggleFavorite = (instrument: string) => {
+    setFavorites(prev => {
+      const newFavorites = new Set(prev);
+      if (newFavorites.has(instrument)) {
+        newFavorites.delete(instrument);
+      } else {
+        newFavorites.add(instrument);
+      }
+      return newFavorites;
+    });
+  };
+
+  const filteredOptions = options
+    .filter(option => {
+      const matchesSearch = option.toLowerCase().includes(searchQuery.toLowerCase());
+      const category = instrumentCategories[option] || 'Other';
+      const matchesCategory = !selectedCategory || selectedCategory === 'All' || category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      // Sort favorites to the top
+      const aIsFavorite = favorites.has(a);
+      const bIsFavorite = favorites.has(b);
+      if (aIsFavorite && !bIsFavorite) return -1;
+      if (!aIsFavorite && bIsFavorite) return 1;
+      return 0;
+    });
+
   const handleSelect = (option: string) => {
     onChange(option);
     setIsOpen(false);
+    setSearchQuery('');
   };
 
   return (
@@ -45,21 +111,205 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options })
       </button>
       
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-800 rounded overflow-hidden z-50" style={{ maxHeight: '125px', overflowY: 'auto' }}>
-          {options.map((option) => (
-            <button
-              key={option}
-              type="button"
-              onClick={() => handleSelect(option)}
-              className={`w-full text-left px-2 py-1.5 text-xs transition-colors ${
-                option === value
-                  ? 'bg-zinc-800 text-zinc-200'
-                  : 'text-zinc-300 hover:bg-zinc-800 hover:text-zinc-200'
-              }`}
-            >
-              {option}
-            </button>
-          ))}
+        <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-800 rounded z-50" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          <div className="flex flex-col gap-2 p-2">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="piano, synth, bass..."
+                className="w-full pl-7 pr-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+
+            {/* Categories */}
+            <div className="flex flex-wrap gap-1">
+              {categories.map(category => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedCategory(selectedCategory === category ? null : category);
+                  }}
+                  className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                    selectedCategory === category
+                      ? 'bg-zinc-700 text-zinc-200'
+                      : 'bg-zinc-950 text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  {category}
+                </button>
+              ))}
+            </div>
+
+            {/* Instrument List */}
+            <div className="flex flex-col gap-1">
+              {filteredOptions.length === 0 ? (
+                <div className="text-[10px] text-zinc-600 py-2 text-center">No instruments found</div>
+              ) : (
+                filteredOptions.map((option) => (
+                  <div
+                    key={option}
+                    className="flex items-center justify-between px-2 py-1 bg-zinc-950 border border-zinc-800 rounded text-[10px] text-zinc-300 hover:bg-zinc-800 hover:border-zinc-700 transition-colors group"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSelect(option);
+                      }}
+                      className="flex-1 text-left truncate"
+                    >
+                      {option}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleFavorite(option);
+                      }}
+                      className="ml-1 shrink-0"
+                    >
+                      <Star 
+                        size={10} 
+                        className={favorites.has(option) ? 'fill-yellow-500 text-yellow-500' : 'text-zinc-500 hover:text-zinc-400'} 
+                      />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+interface SoundItem {
+  id: string;
+  name: string;
+  category: 'Drums' | 'Bass' | 'Piano' | 'Synth' | 'FX' | 'Vocals';
+  isFavorite: boolean;
+}
+
+const SoundBrowser: React.FC = () => {
+  const [isOpen, setIsOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [sounds, setSounds] = useState<SoundItem[]>([
+    // Placeholder sounds - in a real app, these would come from an API or file system
+    { id: '1', name: 'Kick 808', category: 'Drums', isFavorite: false },
+    { id: '2', name: 'Snare Classic', category: 'Drums', isFavorite: true },
+    { id: '3', name: 'Hi-Hat Closed', category: 'Drums', isFavorite: false },
+    { id: '4', name: 'Bass Deep', category: 'Bass', isFavorite: false },
+    { id: '5', name: 'Piano Chord', category: 'Piano', isFavorite: true },
+    { id: '6', name: 'Synth Lead', category: 'Synth', isFavorite: false },
+    { id: '7', name: 'Reverb FX', category: 'FX', isFavorite: false },
+    { id: '8', name: 'Vocal Sample', category: 'Vocals', isFavorite: false },
+  ]);
+
+  const categories = ['All', 'Drums', 'Bass', 'Piano', 'Synth', 'FX', 'Vocals'];
+
+  const toggleFavorite = (id: string) => {
+    setSounds(prev => prev.map(sound => 
+      sound.id === id ? { ...sound, isFavorite: !sound.isFavorite } : sound
+    ));
+  };
+
+  const filteredSounds = sounds
+    .filter(sound => {
+      const matchesSearch = sound.name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = !selectedCategory || selectedCategory === 'All' || sound.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      // Sort favorites to the top
+      if (a.isFavorite && !b.isFavorite) return -1;
+      if (!a.isFavorite && b.isFavorite) return 1;
+      return 0;
+    });
+
+  const handleDragStart = (e: React.DragEvent, sound: SoundItem) => {
+    e.dataTransfer.setData('sound', JSON.stringify(sound));
+    e.dataTransfer.effectAllowed = 'copy';
+  };
+
+  return (
+    <div className="flex flex-col gap-2 shrink-0 border border-zinc-800 rounded">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between px-2 py-1.5 text-xs text-zinc-300 hover:text-zinc-200 transition-colors"
+      >
+        <span>Sounds</span>
+        {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+      </button>
+
+      {isOpen && (
+        <div className="flex flex-col gap-2 px-2 pb-2">
+          {/* Search Bar */}
+          <div className="relative">
+            <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="kick, 808, lofi..."
+              className="w-full pl-7 pr-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-xs text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-700"
+            />
+          </div>
+
+          {/* Categories */}
+          <div className="flex flex-wrap gap-1">
+            {categories.map(category => (
+              <button
+                key={category}
+                onClick={() => setSelectedCategory(selectedCategory === category ? null : category)}
+                className={`px-1.5 py-0.5 text-[10px] rounded transition-colors ${
+                  selectedCategory === category
+                    ? 'bg-zinc-700 text-zinc-200'
+                    : 'bg-zinc-900 text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          {/* Sound List */}
+          <div className="flex flex-col gap-1 max-h-48 overflow-y-auto">
+            {filteredSounds.length === 0 ? (
+              <div className="text-[10px] text-zinc-600 py-2 text-center">No sounds found</div>
+            ) : (
+              filteredSounds.map(sound => (
+                <div
+                  key={sound.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, sound)}
+                  className="flex items-center justify-between px-2 py-1 bg-zinc-900 border border-zinc-800 rounded text-[10px] text-zinc-300 hover:bg-zinc-800 hover:border-zinc-700 cursor-move transition-colors group"
+                >
+                  <span className="truncate flex-1">{sound.name}</span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleFavorite(sound.id);
+                    }}
+                    className="ml-1 shrink-0"
+                  >
+                    <Star 
+                      size={10} 
+                      className={sound.isFavorite ? 'fill-yellow-500 text-yellow-500' : 'text-zinc-500 hover:text-zinc-400'} 
+                    />
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -76,10 +326,6 @@ interface SidebarLeftProps {
   onAddTrack: () => void;
   selectedTrackName: string;
   isDrumSelected: boolean;
-  masterVolume?: number;
-  onMasterVolumeChange?: (volume: number) => void;
-  onExport?: () => void;
-  trackCount?: number;
   totalDuration?: number;
 }
 
@@ -92,10 +338,6 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
   onAddTrack,
   selectedTrackName,
   isDrumSelected,
-  masterVolume = 1.0,
-  onMasterVolumeChange,
-  onExport,
-  trackCount = 0,
   totalDuration = 0,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -144,25 +386,6 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
 
       {!isDrumSelected && (
         <div className="flex flex-col gap-2 shrink-0">
-          <button 
-            onClick={onRecordStart}
-            disabled={isRecording}
-            className={`py-4 border border-zinc-800 rounded flex flex-col items-center justify-center gap-1 transition-colors px-4 ${
-              isRecording 
-                ? 'text-red-400 border-red-500/30' 
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            <Mic size={18} />
-            <span className="text-xs">
-              {isRecording ? 'Recording...' : 'Record'}
-            </span>
-          </button>
-        </div>
-      )}
-
-      {!isDrumSelected && (
-        <div className="flex flex-col gap-2 shrink-0">
           <label className="text-[10px] text-zinc-600">Instrument</label>
           <CustomSelect
             value={selectedInstrument}
@@ -172,49 +395,21 @@ export const SidebarLeft: React.FC<SidebarLeftProps> = ({
         </div>
       )}
 
-      <div className="flex flex-col gap-2 shrink-0 mt-auto">
-        <div className="flex flex-col gap-2 shrink-0">
-          <label className="text-[10px] text-zinc-600">Master Volume</label>
-          <div className="flex items-center gap-2">
-            <Volume2 size={12} className="text-zinc-500" />
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={masterVolume}
-              onChange={(e) => onMasterVolumeChange?.(parseFloat(e.target.value))}
-              className="flex-1 h-0.5 bg-zinc-800 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-1.5 [&::-webkit-slider-thumb]:h-1.5 [&::-webkit-slider-thumb]:bg-zinc-500 [&::-webkit-slider-thumb]:rounded-full"
-            />
-            <span className="text-[10px] font-mono text-zinc-500 w-8 text-right">{Math.round(masterVolume * 100)}</span>
-          </div>
-        </div>
+      {/* Sound / Asset Browser */}
+      <SoundBrowser />
 
-        {onExport && (
-          <button
-            onClick={onExport}
-            className="h-8 border border-zinc-800 rounded px-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-2 shrink-0"
-          >
-            <Download size={12} />
-            Export
-          </button>
-        )}
-
-        <div className="border border-zinc-800 rounded p-2 shrink-0">
-          <div className="text-[10px] text-zinc-600 space-y-0.5">
-            <div className="flex justify-between">
-              <span>Tracks:</span>
-              <span className="text-zinc-400 font-mono">{trackCount}</span>
-            </div>
-            {totalDuration > 0 && (
+      {totalDuration > 0 && (
+        <div className="flex flex-col gap-2 shrink-0 mt-auto">
+          <div className="border border-zinc-800 rounded p-2 shrink-0">
+            <div className="text-[10px] text-zinc-600">
               <div className="flex justify-between">
                 <span>Duration:</span>
                 <span className="text-zinc-400 font-mono">{Math.floor(totalDuration / 60)}:{Math.floor(totalDuration % 60).toString().padStart(2, '0')}</span>
               </div>
-            )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
       
     </aside>
   );

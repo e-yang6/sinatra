@@ -226,7 +226,7 @@ export const Track: React.FC<TrackProps> = ({
             value={track.volume}
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-            className="w-full h-0.5 bg-zinc-800 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-1.5 [&::-webkit-slider-thumb]:h-1.5 [&::-webkit-slider-thumb]:bg-zinc-500 [&::-webkit-slider-thumb]:rounded-full"
+            className="w-full h-0.5 bg-zinc-800 rounded appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-2 [&::-webkit-slider-thumb]:h-2 [&::-webkit-slider-thumb]:bg-zinc-500 [&::-webkit-slider-thumb]:rounded-sm [&::-moz-range-thumb]:w-2 [&::-moz-range-thumb]:h-2 [&::-moz-range-thumb]:bg-zinc-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:rounded-sm"
           />
         </div>
       </div>

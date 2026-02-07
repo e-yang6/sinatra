@@ -150,7 +150,7 @@ export const Terminal: React.FC<TerminalProps> = ({
       <div className="flex-1 overflow-hidden flex">
         {/* Left side: Live recording visualization */}
         <div className="flex-1 border-r border-zinc-800 flex flex-col">
-          <div className="px-3 py-1 border-b border-zinc-800 text-zinc-500 text-[10px]">
+          <div className="px-3 py-1 border-b border-zinc-800 text-[10px]" style={{ color: '#c9a961' }}>
             Live Monitor
           </div>
           <div className="flex-1 overflow-y-auto px-3 py-2 text-zinc-400">
@@ -185,7 +185,7 @@ export const Terminal: React.FC<TerminalProps> = ({
 
         {/* Right side: Recording session log */}
         <div className="flex-1 flex flex-col">
-          <div className="px-3 py-1 border-b border-zinc-800 text-zinc-500 text-[10px]">
+          <div className="px-3 py-1 border-b border-zinc-800 text-[10px]" style={{ color: '#c9a961' }}>
             Session Log
           </div>
           <div

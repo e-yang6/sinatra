@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { Track } from './Track';
 import { Waveform } from './Waveform';
 import { PianoRoll } from './PianoRoll';
@@ -41,6 +41,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   onSeek,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const playheadRef = useRef<HTMLDivElement>(null);
+  const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
 
   // Calculate timeline width from longest track
   const maxDuration = Math.max(
@@ -66,7 +68,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
   // Auto-scroll to keep playhead visible
   useEffect(() => {
-    if (!scrollRef.current || !isPlaying) return;
+    if (!scrollRef.current || !isPlaying || isDraggingPlayhead) return;
     const el = scrollRef.current;
     const playheadPx = playheadSec * PIXELS_PER_SECOND;
     const viewWidth = el.clientWidth - CONTROLS_WIDTH;
@@ -75,7 +77,38 @@ export const Timeline: React.FC<TimelineProps> = ({
     if (playheadPx > viewRight - 80 || playheadPx < el.scrollLeft) {
       el.scrollLeft = Math.max(0, playheadPx - 200);
     }
-  }, [playheadSec, isPlaying]);
+  }, [playheadSec, isPlaying, isDraggingPlayhead]);
+
+  // Handle playhead dragging
+  const handlePlayheadMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingPlayhead(true);
+  };
+
+  useEffect(() => {
+    if (!isDraggingPlayhead) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!scrollRef.current) return;
+      const rect = scrollRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left - CONTROLS_WIDTH;
+      const sec = Math.max(0, x / PIXELS_PER_SECOND);
+      onSeek(sec);
+    };
+
+    const handleMouseUp = () => {
+      setIsDraggingPlayhead(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDraggingPlayhead, onSeek]);
 
   const playheadPx = playheadSec * PIXELS_PER_SECOND;
 
@@ -193,6 +226,21 @@ export const Timeline: React.FC<TimelineProps> = ({
                 backgroundColor: '#c9a961',
                 opacity: 0.7,
               }}
+            />
+            {/* Draggable playhead square head */}
+            <div
+              ref={playheadRef}
+              className="absolute z-30 cursor-ew-resize rounded-sm"
+              style={{
+                left: CONTROLS_WIDTH + playheadPx - 4,
+                top: 0,
+                width: '8px',
+                height: '8px',
+                backgroundColor: '#c9a961',
+                border: '1px solid rgba(201, 169, 97, 0.3)',
+              }}
+              onMouseDown={handlePlayheadMouseDown}
+              title="Drag to seek"
             />
           </div>
         </div>

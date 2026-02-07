@@ -65,4 +65,5 @@ export interface TrackData {
   instrument?: InstrumentType; // Instrument assigned to this track
   audioDuration?: number; // Duration in seconds for waveform sync
   color?: string; // Hex color for track customization
+  unmutedVolume?: number; // Volume before muting (for restoration)
 }
