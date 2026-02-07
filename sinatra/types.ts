@@ -63,6 +63,7 @@ export interface Clip {
   audioUrl: string;               // Blob URL for the audio data
   offsetSec: number;              // Trim offset into the audio file (seconds, for left-edge trim)
   originalDurationSec: number;    // Full untrimmed audio duration (seconds)
+  midiFilename?: string;          // Backend MIDI filename for re-rendering with different instruments
 }
 
 export interface Note {

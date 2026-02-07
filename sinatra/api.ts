@@ -115,6 +115,29 @@ export async function renderMidi(instrument: string): Promise<Blob> {
 }
 
 /**
+ * Re-render a specific MIDI file with a different instrument.
+ * Used when clips move between tracks or when a track's instrument changes.
+ */
+export async function reRenderMidi(midiFilename: string, instrument: string): Promise<Blob> {
+  const formData = new FormData();
+  formData.append('midi_filename', midiFilename);
+  formData.append('instrument', instrument);
+
+  const response = await fetch(`${API_BASE}/re-render`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Re-rendering failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
+
+
+/**
  * Process everything in one request: upload drum + vocal, render
  */
 export async function processAll(

@@ -30,6 +30,7 @@ interface TimelineProps {
   onSeek: (sec: number) => void;
   onSelectClip: (clipId: string | null) => void;
   onUpdateClip: (trackId: string, clipId: string, updates: Partial<Clip>) => void;
+  onMoveClipToTrack: (sourceTrackId: string, destTrackId: string, clipId: string, newStartSec: number) => void;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -46,18 +47,21 @@ export const Timeline: React.FC<TimelineProps> = ({
   onSeek,
   onSelectClip,
   onUpdateClip,
+  onMoveClipToTrack,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
+  const trackRowsRef = useRef<HTMLDivElement>(null);
   const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
 
-  // Clip drag state (move)
+  // Clip drag state (move — supports cross-track)
   const [draggingClip, setDraggingClip] = useState<{
     trackId: string;
     clipId: string;
     startX: number;
     originalStartSec: number;
   } | null>(null);
+  const [dragTargetTrackId, setDragTargetTrackId] = useState<string | null>(null);
 
   // Clip resize state
   const [resizingClip, setResizingClip] = useState<{
@@ -157,13 +161,41 @@ export const Timeline: React.FC<TimelineProps> = ({
     if (!draggingClip) return;
 
     const handleMouseMove = (e: MouseEvent) => {
+      // Horizontal movement (time)
       const dx = e.clientX - draggingClip.startX;
       const dSec = dx / PIXELS_PER_SECOND;
       const newStartSec = Math.max(0, draggingClip.originalStartSec + dSec);
       onUpdateClip(draggingClip.trackId, draggingClip.clipId, { startSec: newStartSec });
+
+      // Vertical movement — detect which track the cursor is over
+      if (trackRowsRef.current) {
+        const trackElements = trackRowsRef.current.querySelectorAll('[data-track-id]');
+        let hoverTrackId: string | null = null;
+        trackElements.forEach(el => {
+          const rect = el.getBoundingClientRect();
+          if (e.clientY >= rect.top && e.clientY <= rect.bottom) {
+            hoverTrackId = el.getAttribute('data-track-id');
+          }
+        });
+        // Don't allow dropping on the drum track
+        if (hoverTrackId === '1') hoverTrackId = null;
+        setDragTargetTrackId(hoverTrackId !== draggingClip.trackId ? hoverTrackId : null);
+      }
     };
 
-    const handleMouseUp = () => setDraggingClip(null);
+    const handleMouseUp = (e: MouseEvent) => {
+      // Check if clip was dropped on a different track
+      if (dragTargetTrackId && dragTargetTrackId !== draggingClip.trackId) {
+        // Calculate final startSec
+        const dx = e.clientX - draggingClip.startX;
+        const dSec = dx / PIXELS_PER_SECOND;
+        const newStartSec = Math.max(0, draggingClip.originalStartSec + dSec);
+
+        onMoveClipToTrack(draggingClip.trackId, dragTargetTrackId, draggingClip.clipId, newStartSec);
+      }
+      setDraggingClip(null);
+      setDragTargetTrackId(null);
+    };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
@@ -171,7 +203,7 @@ export const Timeline: React.FC<TimelineProps> = ({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggingClip, onUpdateClip]);
+  }, [draggingClip, dragTargetTrackId, onUpdateClip, onMoveClipToTrack]);
 
   // ---- Clip resize dragging ----
   const handleResizeMouseDown = (e: React.MouseEvent, trackId: string, clip: Clip, edge: 'left' | 'right') => {
@@ -282,17 +314,25 @@ export const Timeline: React.FC<TimelineProps> = ({
               ))}
             </div>
 
-            <div className="relative z-10 space-y-2">
+            <div className="relative z-10 space-y-2" ref={trackRowsRef}>
               {tracks.map((track) => {
                 const isDrumTrack = track.id === '1';
                 const waveformWidthPx = isDrumTrack
                   ? Math.max(4, (track.audioDuration || 0) * PIXELS_PER_SECOND)
                   : 0;
                 const numBars = Math.max(50, Math.min(600, Math.floor(waveformWidthPx / 3)));
+                const isDropTarget = dragTargetTrackId === track.id && !isDrumTrack;
 
                 return (
-                  <Track
+                  <div
                     key={track.id}
+                    data-track-id={track.id}
+                    className="rounded transition-shadow"
+                    style={isDropTarget ? {
+                      boxShadow: `0 0 16px ${track.color || '#6366f1'}44, inset 0 0 0 2px ${track.color || '#6366f1'}88`,
+                    } : {}}
+                  >
+                  <Track
                     track={track}
                     isActive={true}
                     isSelected={track.id === selectedTrackId}
@@ -445,6 +485,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                       </div>
                     )}
                   </Track>
+                  </div>
                 );
               })}
 

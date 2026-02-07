@@ -94,6 +94,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isResizingRef.current) return;
+    // Calculate width from the right edge (since chatbot is on the right)
     const newWidth = window.innerWidth - e.clientX;
     const minWidth = 300;
     const maxWidth = 800;
@@ -360,7 +361,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
   return (
     <>
       <div
-        className="fixed right-0 top-0 bottom-0 bg-zinc-950 border-l border-zinc-800 flex flex-col z-40"
+        className="bg-zinc-950 border-l border-zinc-800 flex flex-col shrink-0 relative"
         style={{ width: `${width}px` }}
       >
         {/* Resize handle */}

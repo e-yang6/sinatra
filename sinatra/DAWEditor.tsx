@@ -5,7 +5,7 @@ import { Timeline } from './components/Timeline';
 import { Terminal } from './components/Terminal';
 import { Chatbot } from './components/Chatbot';
 import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
-import { uploadDrum, uploadVocal, renderMidi, uploadSample, generateChords, ChatAction, ProjectContext } from './api';
+import { uploadDrum, uploadVocal, renderMidi, reRenderMidi, uploadSample, generateChords, ChatAction, ProjectContext } from './api';
 
 // ---- WAV encoding utility ----
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -190,14 +190,55 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     setSelectedTrackId(id);
   }, []);
 
-  const handleInstrumentChange = useCallback((inst: InstrumentType) => {
-    setSelectedTrackId(prev => {
-      setTracks(tracks => tracks.map(t =>
-        t.id === prev ? { ...t, instrument: inst } : t
-      ));
-      return prev;
-    });
-  }, []);
+  const handleInstrumentChange = useCallback(async (inst: InstrumentType) => {
+    const trackId = selectedTrackId;
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+
+    const oldInstrument = track.instrument;
+
+    // Update the instrument and name immediately
+    setTracks(prev => prev.map(t =>
+      t.id === trackId ? { ...t, instrument: inst, name: `${inst} (Track ${t.id})` } : t
+    ));
+
+    // Re-render all clips that have MIDI files when the instrument changes
+    const clipsWithMidi = (track.clips || []).filter(c => c.midiFilename);
+    if (oldInstrument !== inst && clipsWithMidi.length > 0 && inst !== InstrumentType.RAW_AUDIO) {
+      setIsProcessing(true);
+      setStatusMessage(`Re-rendering ${clipsWithMidi.length} clip(s) for ${inst}...`);
+
+      for (const clip of clipsWithMidi) {
+        try {
+          const audioBlob = await reRenderMidi(clip.midiFilename!, inst);
+          const renderedUrl = URL.createObjectURL(audioBlob);
+
+          setTracks(prev => prev.map(t => {
+            if (t.id !== trackId) return t;
+            const updatedClips = (t.clips || []).map(c =>
+              c.id === clip.id ? { ...c, audioUrl: renderedUrl } : c
+            );
+            return { ...t, clips: updatedClips };
+          }));
+
+          // Update audio element
+          const audioEl = clipAudioMapRef.current.get(clip.id);
+          if (audioEl) {
+            audioEl.src = renderedUrl;
+          } else {
+            clipAudioMapRef.current.set(clip.id, new Audio(renderedUrl));
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Re-rendering failed';
+          console.error(`[Sinatra] Failed to re-render clip ${clip.id}:`, msg);
+          setError(msg);
+        }
+      }
+
+      setIsProcessing(false);
+      setStatusMessage(`Done! ${clipsWithMidi.length} clip(s) re-rendered for ${inst}.`);
+    }
+  }, [selectedTrackId, tracks]);
 
   // ==================================
   //  TRANSPORT ΓÇö linear time (seconds)
@@ -646,14 +687,14 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
 
     try {
       console.log(`[Sinatra] Processing clip ${clipId} for track ${trackId}: ${file.size} bytes, instrument: ${instrument}`);
-      await uploadVocal(file, isRawAudio, {
+      const uploadResult = await uploadVocal(file, isRawAudio, {
         key: musicalKey,
         scale: scaleType,
         quantize,
       });
 
       if (isRawAudio) {
-        // Raw audio ΓÇö clip already has the correct audioUrl
+        // Raw audio — clip already has the correct audioUrl
         setTracks(prev => prev.map(t =>
           t.id === trackId ? { ...t, name: `Raw Audio (Track ${trackId})` } : t
         ));
@@ -665,11 +706,14 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         console.log(`[Sinatra] Rendered audio: ${audioBlob.size} bytes`);
         const renderedUrl = URL.createObjectURL(audioBlob);
 
-        // Update clip's audioUrl with rendered audio
+        // Store midiFilename in the clip so it can be re-rendered with different instruments
+        const midiFilename = uploadResult.midi_filename || undefined;
+
+        // Update clip's audioUrl with rendered audio + store midiFilename
         setTracks(prev => prev.map(t => {
           if (t.id !== trackId) return t;
           const updatedClips = (t.clips || []).map(c =>
-            c.id === clipId ? { ...c, audioUrl: renderedUrl } : c
+            c.id === clipId ? { ...c, audioUrl: renderedUrl, midiFilename } : c
           );
           return { ...t, clips: updatedClips, name: `${instrument} (Track ${trackId})` };
         }));
@@ -862,6 +906,65 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     }));
   }, []);
 
+  const handleMoveClipBetweenTracks = useCallback(async (sourceTrackId: string, destTrackId: string, clipId: string, newStartSec: number) => {
+    console.log(`[Sinatra] Moving clip ${clipId} from track ${sourceTrackId} to track ${destTrackId}`);
+
+    // Snapshot info before modifying state
+    const currentTracks = tracks;
+    const sourceTrack = currentTracks.find(t => t.id === sourceTrackId);
+    const destTrack = currentTracks.find(t => t.id === destTrackId);
+    const clip = sourceTrack?.clips?.find(c => c.id === clipId);
+    if (!clip || !sourceTrack || !destTrack) return;
+
+    const sourceInstrument = sourceTrack.instrument;
+    const destInstrument = destTrack.instrument;
+    const instrumentChanged = sourceInstrument !== destInstrument;
+
+    // Move the clip between tracks immediately (for snappy UI)
+    const movedClip: Clip = { ...clip, startSec: Math.max(0, newStartSec) };
+    setTracks(prev => prev.map(t => {
+      if (t.id === sourceTrackId) return { ...t, clips: (t.clips || []).filter(c => c.id !== clipId) };
+      if (t.id === destTrackId) return { ...t, clips: [...(t.clips || []), movedClip] };
+      return t;
+    }));
+
+    // If the instrument changed and the clip has a MIDI file, re-render it
+    if (instrumentChanged && clip.midiFilename && destInstrument && destInstrument !== InstrumentType.RAW_AUDIO) {
+      setIsProcessing(true);
+      setStatusMessage(`Re-rendering clip for ${destInstrument}...`);
+      try {
+        const audioBlob = await reRenderMidi(clip.midiFilename, destInstrument);
+        const renderedUrl = URL.createObjectURL(audioBlob);
+
+        // Update the clip's audio in the destination track
+        setTracks(prev => prev.map(t => {
+          if (t.id !== destTrackId) return t;
+          const updatedClips = (t.clips || []).map(c =>
+            c.id === clipId ? { ...c, audioUrl: renderedUrl } : c
+          );
+          return { ...t, clips: updatedClips };
+        }));
+
+        // Update audio element
+        const audioEl = clipAudioMapRef.current.get(clipId);
+        if (audioEl) {
+          audioEl.src = renderedUrl;
+        } else {
+          clipAudioMapRef.current.set(clipId, new Audio(renderedUrl));
+        }
+
+        setStatusMessage(`Clip re-rendered for ${destInstrument}.`);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Re-rendering failed';
+        console.error('[Sinatra] Re-render error:', msg);
+        setError(msg);
+        setStatusMessage('Clip moved but re-rendering failed');
+      } finally {
+        setIsProcessing(false);
+      }
+    }
+  }, [tracks]);
+
   // ==============================
   //  UNDO/REDO
   // ==============================
@@ -986,6 +1089,14 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
 
   const handleUpdateTrack = (id: string, updates: Partial<TrackData>) => {
     setTracks(prev => {
+      // If instrument is being changed, auto-update the track name
+      if (updates.instrument !== undefined) {
+        const track = prev.find(t => t.id === id);
+        if (track && !updates.name) {
+          updates.name = `${updates.instrument} (Track ${id})`;
+        }
+      }
+
       // Handle mute/unmute with volume changes
       if (updates.isMuted !== undefined) {
         const currentTrack = prev.find(t => t.id === id);
@@ -1309,20 +1420,44 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           onQuantizeChange={setQuantize}
         />
 
-        <Timeline
-          playheadSec={playheadSec}
-          tracks={tracks}
-          notes={notes}
-          selectedTrackId={selectedTrackId}
-          selectedClipId={selectedClipId}
-          isPlaying={isPlaying}
-          onSelectTrack={handleSelectTrack}
-          onUpdateTrack={handleUpdateTrack}
-          onAddTrack={addTrack}
-          onDeleteTrack={handleDeleteTrack}
-          onSeek={handleSeek}
-          onSelectClip={handleSelectClip}
-          onUpdateClip={handleUpdateClip}
+        <div className="flex-1 overflow-hidden min-w-0">
+          <Timeline
+            playheadSec={playheadSec}
+            tracks={tracks}
+            notes={notes}
+            selectedTrackId={selectedTrackId}
+            selectedClipId={selectedClipId}
+            isPlaying={isPlaying}
+            onSelectTrack={handleSelectTrack}
+            onUpdateTrack={handleUpdateTrack}
+            onAddTrack={addTrack}
+            onDeleteTrack={handleDeleteTrack}
+            onSeek={handleSeek}
+            onSelectClip={handleSelectClip}
+            onUpdateClip={handleUpdateClip}
+            onMoveClipToTrack={handleMoveClipBetweenTracks}
+          />
+        </div>
+
+        <Chatbot
+          width={chatbotWidth}
+          onWidthChange={setChatbotWidth}
+          projectContext={{
+            bpm,
+            isPlaying,
+            isRecording,
+            selectedInstrument,
+            key: musicalKey,
+            scale: scaleType,
+            quantize,
+            tracks: tracks.map(t => ({
+              id: t.id,
+              name: t.name,
+              instrument: t.instrument,
+              isMuted: t.isMuted,
+            })),
+          }}
+          onAction={handleChatAction}
         />
       </div>
 
@@ -1334,27 +1469,6 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         recordingSessions={recordingSessions}
         currentPeakLevel={currentPeakLevel}
         currentAvgLevel={currentAvgLevel}
-      />
-
-      <Chatbot
-        width={chatbotWidth}
-        onWidthChange={setChatbotWidth}
-        projectContext={{
-          bpm,
-          isPlaying,
-          isRecording,
-          selectedInstrument,
-          key: musicalKey,
-          scale: scaleType,
-          quantize,
-          tracks: tracks.map(t => ({
-            id: t.id,
-            name: t.name,
-            instrument: t.instrument,
-            isMuted: t.isMuted,
-          })),
-        }}
-        onAction={handleChatAction}
       />
     </div>
   );

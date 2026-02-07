@@ -343,6 +343,49 @@ async def download_midi():
     )
 
 
+@app.post("/re-render")
+async def re_render(
+    midi_filename: str = Form(...),
+    instrument: str = Form(default="Piano"),
+):
+    """
+    Re-render a specific MIDI file with a different instrument.
+    Used when clips are moved between tracks or when a track's instrument changes.
+    """
+    midi_path = os.path.join(UPLOAD_DIR, midi_filename)
+    if not os.path.exists(midi_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"MIDI file '{midi_filename}' not found.",
+        )
+
+    try:
+        if instrument == "Custom Sample":
+            sample_path = session.get("sample_path")
+            if not sample_path or not os.path.exists(sample_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail="No sample uploaded. Upload a one-shot sample first.",
+                )
+            wav_path = render_with_sample(
+                midi_path,
+                sample_path,
+                base_pitch=session.get("sample_base_pitch"),
+            )
+        else:
+            wav_path = render_midi_to_wav(midi_path, instrument=instrument)
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Re-rendering failed: {e}")
+
+    return FileResponse(
+        wav_path,
+        media_type="audio/wav",
+        filename="sinatra_rerendered.wav",
+    )
+
+
 # ==================== CHORD GENERATION ====================
 
 

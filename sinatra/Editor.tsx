@@ -1070,12 +1070,16 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           tracks={tracks}
           notes={notes}
           selectedTrackId={selectedTrackId}
+          selectedClipId={null}
           isPlaying={isPlaying}
           onSelectTrack={handleSelectTrack}
           onUpdateTrack={handleUpdateTrack}
           onAddTrack={addTrack}
           onDeleteTrack={handleDeleteTrack}
           onSeek={handleSeek}
+          onSelectClip={() => {}}
+          onUpdateClip={() => {}}
+          onMoveClipToTrack={() => {}}
         />
       </div>
 
