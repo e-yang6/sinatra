@@ -392,6 +392,13 @@ export const ProjectsPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Cat Container */}
+          <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-2xl p-6 backdrop-blur-sm flex-shrink-0">
+            <div className="flex flex-col items-center justify-center">
+              <div className="text-6xl mb-2">🐱</div>
+            </div>
+          </div>
         </div>
 
         {/* Left Column - Projects List */}
