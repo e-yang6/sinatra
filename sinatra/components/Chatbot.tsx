@@ -1,14 +1,41 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { MessageCircle, X, Send, Bot, User, Mic, MicOff, Trash2 } from 'lucide-react';
-import { sendChatMessage, sendVoiceMessage, clearChatHistory, ChatAction, ProjectContext } from '../api';
+import { sendChatMessage, clearChatHistory, ChatAction, ProjectContext } from '../api';
+
+// Web Speech API types
+interface SpeechRecognitionEvent extends Event {
+  results: SpeechRecognitionResultList;
+  resultIndex: number;
+}
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message?: string;
+}
+interface SpeechRecognitionInstance extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  start(): void;
+  stop(): void;
+  abort(): void;
+  onresult: ((event: SpeechRecognitionEvent) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEvent) => void) | null;
+  onend: (() => void) | null;
+  onstart: (() => void) | null;
+}
+declare global {
+  interface Window {
+    SpeechRecognition: new () => SpeechRecognitionInstance;
+    webkitSpeechRecognition: new () => SpeechRecognitionInstance;
+  }
+}
 
 interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  transcription?: string; // For voice messages, shows what was heard
 }
 
 interface ChatbotProps {
@@ -30,13 +57,16 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const resizeRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isResizingRef = useRef(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const finalTranscriptRef = useRef('');
+  const autoSendTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const manualStopRef = useRef(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -126,120 +156,170 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
     }
   };
 
-  // ---- Voice recording ----
-  const startVoiceRecording = async () => {
+  // ---- Speech-to-Text (Web Speech API) ----
+  const sendTranscript = useCallback(async (text: string) => {
+    if (!text.trim() || isLoading) return;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: `🎤 ${text.trim()}`,
+      timestamp: new Date(),
+    };
+
+    setIsLoading(true);
+    setMessages(prev => [...prev, userMessage]);
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm',
-      });
+      const result = await sendChatMessage(text.trim(), projectContext);
 
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+      const assistantMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: result.response,
+        timestamp: new Date(),
       };
 
-      mediaRecorder.onstop = async () => {
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
-
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-
-        if (audioBlob.size === 0) {
-          setMessages(prev => [...prev, {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: 'No audio was captured. Please check your microphone.',
-            timestamp: new Date(),
-          }]);
-          return;
-        }
-
-        // Add a placeholder user message
-        const placeholderMsg: Message = {
-          id: Date.now().toString(),
-          role: 'user',
-          content: '🎤 Voice message...',
-          timestamp: new Date(),
-        };
-        setMessages(prev => [...prev, placeholderMsg]);
-        setIsLoading(true);
-
-        try {
-          const result = await sendVoiceMessage(audioBlob, projectContext);
-
-          // Update user message with transcription
-          const transcribedContent = result.transcription
-            ? `🎤 "${result.transcription}"`
-            : '🎤 (could not transcribe)';
-
-          setMessages(prev => prev.map(m =>
-            m.id === placeholderMsg.id
-              ? { ...m, content: transcribedContent, transcription: result.transcription }
-              : m
-          ));
-
-          // Add assistant response
-          const assistantMessage: Message = {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: result.response,
-            timestamp: new Date(),
-          };
-
-          setMessages(prev => [...prev, assistantMessage]);
-          processActions(result.actions);
-        } catch (error: any) {
-          console.error('Voice chat error:', error);
-          setMessages(prev => prev.map(m =>
-            m.id === placeholderMsg.id
-              ? { ...m, content: '🎤 (voice message failed)' }
-              : m
-          ));
-          setMessages(prev => [...prev, {
-            id: (Date.now() + 1).toString(),
-            role: 'assistant',
-            content: `Voice processing error: ${error?.message || 'Unknown error'}. Make sure the backend is running with gradio_client installed.`,
-            timestamp: new Date(),
-          }]);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-      setIsRecordingVoice(true);
+      setMessages(prev => [...prev, assistantMessage]);
+      processActions(result.actions);
     } catch (error: any) {
-      console.error('Microphone error:', error);
+      console.error('Voice chat error:', error);
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Could not access your microphone. Please check your browser permissions.',
+        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}.`,
         timestamp: new Date(),
       }]);
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [isLoading, projectContext, processActions]);
 
-  const stopVoiceRecording = () => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-      mediaRecorderRef.current.stop();
+  const startListening = useCallback(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setMessages(prev => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Speech recognition is not supported in your browser. Please use Chrome or Edge.',
+        timestamp: new Date(),
+      }]);
+      return;
     }
-    setIsRecordingVoice(false);
-  };
 
-  const handleVoiceToggle = () => {
-    if (isRecordingVoice) {
-      stopVoiceRecording();
+    // Clear any existing timer
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    finalTranscriptRef.current = '';
+    manualStopRef.current = false;
+    setInterimTranscript('');
+    setInput('');
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interim = '';
+      let final = '';
+
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          final += result[0].transcript + ' ';
+        } else {
+          interim += result[0].transcript;
+        }
+      }
+
+      finalTranscriptRef.current = final;
+      setInterimTranscript(interim);
+      setInput(final + interim);
+
+      // Reset auto-send timer — send 1.5s after user stops speaking
+      if (autoSendTimerRef.current) {
+        clearTimeout(autoSendTimerRef.current);
+      }
+      autoSendTimerRef.current = setTimeout(() => {
+        // User stopped speaking — stop recognition and auto-send
+        manualStopRef.current = true;
+        recognition.stop();
+      }, 1500);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.error('Speech recognition error:', event.error);
+      if (event.error !== 'aborted' && event.error !== 'no-speech') {
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `Speech recognition error: ${event.error}. Please try again.`,
+          timestamp: new Date(),
+        }]);
+      }
+      setIsListening(false);
+      setInterimTranscript('');
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      setInterimTranscript('');
+
+      const fullText = finalTranscriptRef.current.trim();
+      if (fullText) {
+        setInput('');
+        sendTranscript(fullText);
+      }
+
+      finalTranscriptRef.current = '';
+      if (autoSendTimerRef.current) {
+        clearTimeout(autoSendTimerRef.current);
+        autoSendTimerRef.current = null;
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  }, [sendTranscript]);
+
+  const stopListening = useCallback(() => {
+    if (recognitionRef.current) {
+      manualStopRef.current = true;
+      recognitionRef.current.stop();
+    }
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+  }, []);
+
+  const handleVoiceToggle = useCallback(() => {
+    if (isListening) {
+      stopListening();
     } else {
-      startVoiceRecording();
+      startListening();
     }
-  };
+  }, [isListening, startListening, stopListening]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+      if (autoSendTimerRef.current) {
+        clearTimeout(autoSendTimerRef.current);
+      }
+    };
+  }, []);
 
   // ---- Clear chat ----
   const handleClearChat = async () => {
@@ -387,11 +467,18 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Voice recording indicator */}
-        {isRecordingVoice && (
-          <div className="px-4 py-2 bg-red-950/30 border-t border-red-900/30 flex items-center gap-2 shrink-0">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-            <span className="text-xs text-red-400">Recording... Click mic to stop</span>
+        {/* Voice listening indicator */}
+        {isListening && (
+          <div className="px-4 py-2 bg-emerald-950/30 border-t border-emerald-900/30 flex items-center gap-2 shrink-0">
+            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+            <span className="text-xs text-emerald-400">
+              Listening{interimTranscript ? '...' : ' — speak now'}
+            </span>
+            {interimTranscript && (
+              <span className="text-xs text-zinc-400 italic truncate flex-1">
+                {interimTranscript}
+              </span>
+            )}
           </div>
         )}
 
@@ -402,28 +489,30 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
               onClick={handleVoiceToggle}
               disabled={isLoading}
               className={`px-3 py-2 rounded-lg transition-colors flex items-center justify-center ${
-                isRecordingVoice
-                  ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 animate-pulse'
+                isListening
+                  ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 animate-pulse'
                   : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isRecordingVoice ? 'Stop recording' : 'Start voice input'}
+              title={isListening ? 'Stop listening' : 'Start voice input (hands-free)'}
             >
-              {isRecordingVoice ? <MicOff size={16} /> : <Mic size={16} />}
+              {isListening ? <MicOff size={16} /> : <Mic size={16} />}
             </button>
             <textarea
               ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Ask me anything..."
-              className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none focus:border-zinc-700 resize-none overflow-y-auto"
+              placeholder={isListening ? 'Speak now...' : 'Ask me anything...'}
+              className={`flex-1 bg-zinc-900 border rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none resize-none overflow-y-auto ${
+                isListening ? 'border-emerald-800 focus:border-emerald-700' : 'border-zinc-800 focus:border-zinc-700'
+              }`}
               rows={1}
               style={{ minHeight: '40px', maxHeight: '120px' }}
-              disabled={isRecordingVoice}
+              readOnly={isListening}
             />
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isLoading || isRecordingVoice}
+              disabled={!input.trim() || isLoading || isListening}
               className="px-4 py-2 bg-[#c9a961]/20 hover:bg-[#c9a961]/30 text-[#c9a961] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               title="Send message"
             >
@@ -431,7 +520,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
             </button>
           </div>
           <div className="text-[10px] text-zinc-600 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line • Click 🎤 for voice
+            Press Enter to send, Shift+Enter for new line • Click 🎤 for hands-free voice
           </div>
         </div>
       </div>

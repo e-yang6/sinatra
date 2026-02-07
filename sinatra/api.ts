@@ -204,30 +204,6 @@ export async function sendChatMessage(
 }
 
 /**
- * Send a voice recording to Frank (AI chatbot) (speech-to-text + chat)
- */
-export async function sendVoiceMessage(
-  audioBlob: Blob,
-  context?: ProjectContext
-): Promise<ChatResponse> {
-  const formData = new FormData();
-  formData.append('file', audioBlob, 'voice.webm');
-  formData.append('context', JSON.stringify(context || {}));
-
-  const response = await fetch(`${API_BASE}/chat/voice`, {
-    method: 'POST',
-    body: formData,
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Voice chat failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
-
-  return response.json();
-}
-
-/**
  * Clear the chat conversation history
  */
 export async function clearChatHistory(): Promise<void> {
