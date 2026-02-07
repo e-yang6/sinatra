@@ -38,7 +38,7 @@ const GlassInputWrapper = ({ children }: { children: React.ReactNode }) => (
 
 export const SignInPage: React.FC<SignInPageProps> = ({
   title = <span className="font-light text-slate-900 tracking-tighter">Welcome</span>,
-  description = "Access your account and continue your journey with us",
+  description = "Access your account and continue your flight with us",
   heroImageSrc,
   onSignIn,
   onGoogleSignIn,
