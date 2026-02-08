@@ -46,6 +46,7 @@ Test it: open http://localhost:8000/health in your browser.
 
 ## Terminal 1 - Backend (MAC)
 
+```powershell
 # 1) Create and activate venv (Python 3.12)
 python3.12 -m venv venv
 source venv/bin/activate
