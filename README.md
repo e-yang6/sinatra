@@ -73,7 +73,6 @@ Project Audio → FFmpeg (Browser) → Three.js Visualizer → Canvas Rendering 
 | Database | Supabase (PostgreSQL) |
 | Authentication | Supabase Auth |
 | Audio APIs | Web Audio API, MediaRecorder API |
-| Blockchain | Solana (for future wallet integration) |
 
 ---
 
