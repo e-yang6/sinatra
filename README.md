@@ -14,6 +14,73 @@ Sinatra combines Spotify's Basic Pitch for vocal-to-MIDI transcription, FluidSyn
 
 ---
 
+## Terminal 1 — Backend (WINDOWS)
+
+```powershell
+cd backend
+
+# Create virtual environment with Python 3.12
+py -3.12 -m venv venv
+
+# Activate it
+.\venv\Scripts\activate.bat
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set SoundFont path (replace with your actual path)
+$env:SOUNDFONT_PATH="C:\soundfonts\FluidR3_GM.sf2"
+
+# Chatbot
+pip install google-genai gradio_client python-dotenv
+
+# Start server
+uvicorn main:app --reload --port 8000
+```
+
+Server runs at **http://localhost:8000**
+
+Test it: open http://localhost:8000/health in your browser.
+
+---
+
+## Terminal 1 - Backend (MAC)
+
+# 1) Create and activate venv (Python 3.12)
+python3.12 -m venv venv
+source venv/bin/activate
+
+# 2) Install dependencies
+pip install -r requirements.txt
+pip install basic-pitch
+
+# 3) Install FluidSynth (macOS)
+brew install fluidsynth
+
+# 4) Set SoundFont path (adjust if your filename differs)
+export SOUNDFONT_PATH=<FILE_PATH_HERE>
+
+# 5) Run the backend
+uvicorn main:app --reload --port 8000
+
+---
+
+## Terminal 2 — Frontend
+
+```powershell
+cd sinatra
+
+# Install dependencies (first time only)
+npm install
+
+# Start dev server
+npm run dev
+```
+
+Frontend runs at **http://localhost:3000**
+
+---
+
 ## Features
 
 - **Vocal-to-MIDI transcription** using Spotify's Basic Pitch with pitch snapping and scale mapping
