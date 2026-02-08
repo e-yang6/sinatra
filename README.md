@@ -63,6 +63,7 @@ export SOUNDFONT_PATH=<FILE_PATH_HERE>
 
 # 5) Run the backend
 uvicorn main:app --reload --port 8000
+```
 
 ---
 
