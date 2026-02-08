@@ -178,9 +178,9 @@ export const Track: React.FC<TrackProps> = ({
               </div>
             </div>
           )}
-          {track.instrument && (
+            {track.instrument && (
             <span className="text-[9px] text-zinc-500 mt-0.5">{track.instrument}</span>
-          )}
+            )}
         </div>
 
         <div className="flex flex-col gap-1">

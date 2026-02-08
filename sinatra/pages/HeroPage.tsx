@@ -19,6 +19,9 @@ import { Github, Twitter, Instagram, Linkedin } from 'lucide-react';
 
 const sinatraLogo = new URL('../assets/sinalogo.png', import.meta.url).href;
 const earlyDemoVideo = new URL('../assets/Demo.mp4', import.meta.url).href;
+const editorImage = new URL('../assets/feature-assets/editor.png', import.meta.url).href;
+const textImage = new URL('../assets/feature-assets/text.png', import.meta.url).href;
+const frankImage = new URL('../assets/feature-assets/frank.png', import.meta.url).href;
 
 const transitionVariants = {
   item: {
@@ -382,24 +385,24 @@ export const HeroPage: React.FC = () => {
             features={[
               {
                 id: "feature-1",
-                title: "Intuitive Editor",
-                description:
-                  "Professional editor with everything an artist needs to create music, instantly.",
-                image: "https://www.shadcnblocks.com/images/block/placeholder-1.svg",
-              },
-              {
-                id: "feature-2",
                 title: "Voice-to-Instrument Conversion",
                 description:
                   "Convert your voice to any instrument of your choice. No need to hesitate. Just speak and create.",
-                image: "https://www.shadcnblocks.com/images/block/placeholder-2.svg",
+                image: textImage,
               },
               {
-                id: "feature-3",
+                id: "feature-2",
                 title: "AI-Powered Assistant",
                 description:
                   "Use Frank to shave off repetitive tasks, and focus on creating your music instead.",
-                image: "https://www.shadcnblocks.com/images/block/placeholder-3.svg",
+                image: frankImage,
+              },
+              {
+                id: "feature-3",
+                title: "Intuitive Editor",
+                description:
+                  "Professional editor with everything an artist needs to create music, instantly.",
+                image: editorImage,
               },
             ]}
           />
