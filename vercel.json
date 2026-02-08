@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd sinatra && npm install && npm run build",
+  "outputDirectory": "sinatra/dist",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
