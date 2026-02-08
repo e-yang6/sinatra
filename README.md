@@ -13,8 +13,9 @@ That's why we built **Sinatra**: an AI-powered Digital Audio Workstation that ma
 Sinatra combines Spotify's Basic Pitch for vocal-to-MIDI transcription, FluidSynth for instrument rendering, AI-powered chord generation, and an intelligent assistant named Frank. Record multiple tracks, layer sounds, edit clips visually, and export your creations as audio or video with stunning 3D visualizers - no downloads, no installations, just pure creativity.
 
 ---
+## Setup
 
-## Terminal 1 — Backend (WINDOWS)
+### Terminal 1 — Backend (WINDOWS)
 
 ```powershell
 cd backend
@@ -42,9 +43,7 @@ Server runs at **http://localhost:8000**
 
 Test it: open http://localhost:8000/health in your browser.
 
----
-
-## Terminal 1 - Backend (MAC)
+### Terminal 1 - Backend (MAC)
 
 ```powershell
 # 1) Create and activate venv (Python 3.12)
@@ -65,9 +64,7 @@ export SOUNDFONT_PATH=<FILE_PATH_HERE>
 uvicorn main:app --reload --port 8000
 ```
 
----
-
-## Terminal 2 — Frontend
+### Terminal 2 — Frontend
 
 ```powershell
 cd sinatra
