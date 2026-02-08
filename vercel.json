@@ -3,8 +3,20 @@
   "outputDirectory": "sinatra/dist",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "functions": {
+    "api/chat.ts": {
+      "maxDuration": 30
+    },
+    "api/chat/clear.ts": {
+      "maxDuration": 10
+    }
+  }
 }

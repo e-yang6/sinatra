@@ -2,7 +2,32 @@
  * Simple API client for Sinatra backend
  */
 
-const API_BASE = 'http://localhost:8000';
+// Environment-aware API base URL
+// In production, this should point to your deployed backend (e.g., Railway, Render, Fly.io)
+// For local development, use localhost
+const getApiBase = (): string => {
+  // Check if we're in production (Vercel)
+  if (import.meta.env.PROD) {
+    // Use environment variable if set, otherwise fall back to a default
+    // IMPORTANT: Set VITE_BACKEND_URL in Vercel environment variables
+    return import.meta.env.VITE_BACKEND_URL || 'https://your-backend-url.railway.app';
+  }
+  // Development: use localhost
+  return import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
+};
+
+const API_BASE = getApiBase();
+
+// For Vercel serverless functions, use relative paths in production
+// In development, call the backend directly
+const getServerlessApiPath = (path: string): string => {
+  if (import.meta.env.DEV) {
+    // In development, use the backend directly
+    return `${API_BASE}${path}`;
+  }
+  // In production, use Vercel serverless functions
+  return `/api${path}`;
+};
 
 export interface UploadDrumResponse {
   status: string;
@@ -265,12 +290,14 @@ export async function transcribeVoice(audioBlob: Blob): Promise<string> {
 
 /**
  * Send a text message to Frank (AI chatbot)
+ * Uses Vercel serverless function in production, backend in development
  */
 export async function sendChatMessage(
   message: string,
   context?: ProjectContext
 ): Promise<ChatResponse> {
-  const response = await fetch(`${API_BASE}/chat`, {
+  const apiPath = getServerlessApiPath('/chat');
+  const response = await fetch(apiPath, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ message, context }),
@@ -286,7 +313,9 @@ export async function sendChatMessage(
 
 /**
  * Clear the chat conversation history
+ * Uses Vercel serverless function in production, backend in development
  */
 export async function clearChatHistory(): Promise<void> {
-  await fetch(`${API_BASE}/chat/clear`, { method: 'POST' });
+  const apiPath = getServerlessApiPath('/chat/clear');
+  await fetch(apiPath, { method: 'POST' });
 }
