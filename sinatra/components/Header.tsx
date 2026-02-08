@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
         <img 
           src={sinatraLogo} 
           alt="SINATRA" 
-          className="h-12 object-contain"
+          className="h-8 object-contain"
         />
       </div>
 
@@ -126,7 +126,7 @@ export const Header: React.FC<HeaderProps> = ({
         {onExport && (
           <button
             onClick={onExport}
-            className="px-2.5 py-1 border border-[#3b82f6]/30 rounded text-xs text-[#3b82f6]/80 hover:text-[#3b82f6] hover:border-[#3b82f6]/50 transition-colors flex items-center justify-center gap-2"
+            className="px-2.5 py-1 border border-[#6993cf]/30 rounded text-xs text-[#6993cf]/80 hover:text-[#6993cf] hover:border-[#6993cf]/50 transition-colors flex items-center justify-center gap-2"
           >
             <Download size={12} />
             Export

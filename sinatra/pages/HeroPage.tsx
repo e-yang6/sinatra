@@ -361,7 +361,7 @@ export const HeroPage: React.FC = () => {
                 ...transitionVariants,
               }}>
               <div className="relative -mr-56 mt-16 overflow-hidden px-2 sm:mr-0 sm:mt-20 md:mt-24">
-                 <div className="inset-shadow-2xs ring-slate-300 bg-white relative mx-auto max-w-6xl overflow-hidden rounded-2xl border border-slate-300 shadow-lg shadow-slate-200/15 ring-1 h-[600px] p-3">
+                 <div className="inset-shadow-2xs ring-slate-300 bg-white relative mx-auto w-fit overflow-hidden rounded-2xl border border-slate-300 shadow-lg shadow-slate-200/15 ring-1 h-[600px] p-3">
                    {/* Video Player Demo */}
                    <VideoPlayer src={earlyDemoVideo} />
                  </div>
@@ -417,22 +417,17 @@ export const HeroPage: React.FC = () => {
             socialLinks={[
               {
                 icon: <Github className="h-5 w-5" />,
-                href: "https://github.com",
+                href: "https://github.com/e-yang6/sinatra",
                 label: "GitHub"
               },
               {
-                icon: <Twitter className="h-5 w-5" />,
-                href: "https://twitter.com",
-                label: "Twitter"
-              },
-              {
                 icon: <Instagram className="h-5 w-5" />,
-                href: "https://instagram.com",
+                href: "https://www.instagram.com/jeffreywongg_/",
                 label: "Instagram"
               },
               {
                 icon: <Linkedin className="h-5 w-5" />,
-                href: "https://linkedin.com",
+                href: "https://www.linkedin.com/in/jmyl/",
                 label: "LinkedIn"
               },
             ]}

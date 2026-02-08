@@ -33,7 +33,7 @@ export const THEME_MAP: Record<string, VisualizerThemeConfig> = {
     scene: { skyColor: 0x87ceeb, fogColor: 0xc8e6ff, fogNear: 10, fogFar: 80, ambientIntensity: 0.8, directionalColor: 0xfff4d6, directionalIntensity: 1.2 },
   },
   Sad: {
-    primaryColor: '#60a5fa',
+    primaryColor: '#6993cf',
     secondaryColor: '#94a3b8',
     particleSpeed: 0.6,
     pulseIntensity: 0.6,

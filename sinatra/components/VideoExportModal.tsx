@@ -607,7 +607,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
           <div className="flex items-center gap-2">
-            <Film size={18} className="text-[#3b82f6]" />
+            <Film size={18} className="text-[#6993cf]" />
             <h2 className="text-base font-semibold text-zinc-100">Export</h2>
           </div>
           <button
@@ -629,7 +629,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
               onChange={(e) => setSongTitle(e.target.value)}
               placeholder="Enter song title..."
               disabled={isWorking}
-              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-[#3b82f6]/50 focus:ring-1 focus:ring-[#3b82f6]/20 transition-colors disabled:opacity-50"
+              className="w-full px-3 py-2 bg-zinc-950 border border-zinc-700 rounded-lg text-sm text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-[#6993cf]/50 focus:ring-1 focus:ring-[#6993cf]/20 transition-colors disabled:opacity-50"
             />
           </div>
 
@@ -642,7 +642,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
                 disabled={isWorking}
                 className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                   exportType === 'video'
-                    ? 'bg-[#3b82f6]/15 border-[#3b82f6]/40 text-[#3b82f6]'
+                    ? 'bg-[#6993cf]/15 border-[#6993cf]/40 text-[#6993cf]'
                     : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
@@ -653,7 +653,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
                 disabled={isWorking}
                 className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium transition-all border ${
                   exportType === 'audio'
-                    ? 'bg-[#3b82f6]/15 border-[#3b82f6]/40 text-[#3b82f6]'
+                    ? 'bg-[#6993cf]/15 border-[#6993cf]/40 text-[#6993cf]'
                     : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
                 } disabled:opacity-50 disabled:cursor-not-allowed`}
               >
@@ -674,7 +674,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
                   disabled={isWorking}
                   className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                     selectedTheme === name
-                      ? 'bg-[#3b82f6]/15 border-[#3b82f6]/40 text-[#3b82f6]'
+                      ? 'bg-[#6993cf]/15 border-[#6993cf]/40 text-[#6993cf]'
                       : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:text-zinc-300 hover:border-zinc-700'
                   } disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
@@ -718,7 +718,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
               <div className="flex items-center justify-between text-xs text-zinc-400">
                 <span className="flex items-center gap-1.5">
                   {phase === 'preparing' ? (
-                    <Loader2 size={12} className="animate-spin text-[#3b82f6]" />
+                    <Loader2 size={12} className="animate-spin text-[#6993cf]" />
                   ) : (
                     <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                   )}
@@ -732,8 +732,8 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
                 <div
                   className={`h-full rounded-full transition-all duration-300 ease-out ${
                     phase === 'preparing'
-                      ? 'bg-[#3b82f6]'
-                      : 'bg-gradient-to-r from-red-500 to-[#3b82f6]'
+                      ? 'bg-[#6993cf]'
+                      : 'bg-gradient-to-r from-red-500 to-[#6993cf]'
                   }`}
                   style={{ width: `${overallPercent}%` }}
                 />
@@ -770,7 +770,7 @@ const VideoExportModal: React.FC<VideoExportModalProps> = ({
               </button>
               <button
                 onClick={() => exportType === 'video' ? startRender() : startAudioRender()}
-                className="flex items-center gap-2 px-4 py-2 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 border border-[#3b82f6]/40 rounded-lg text-sm text-[#3b82f6] hover:text-[#60a5fa] transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-[#6993cf]/20 hover:bg-[#6993cf]/30 border border-[#6993cf]/40 rounded-lg text-sm text-[#6993cf] hover:text-[#8ba8d9] transition-colors"
               >
                 <Download size={14} />
                 {exportType === 'video' ? 'Render & Download Video' : 'Render & Download Audio'}

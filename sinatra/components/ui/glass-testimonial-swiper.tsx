@@ -138,7 +138,7 @@ export const TestimonialStack = ({ testimonials, visibleSides = 1, autoSwipeInte
           transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
         .pagination-dot.active {
-          background: #3b82f6;
+          background: #6993cf;
           width: 24px;
           border-radius: 4px;
         }
@@ -190,7 +190,7 @@ export const TestimonialStack = ({ testimonials, visibleSides = 1, autoSwipeInte
         }
 
         const tagClasses = (type: 'featured' | 'default') => type === 'featured' 
-          ? 'bg-[#3b82f6]/20 text-[#3b82f6] border border-[#3b82f6]/30' 
+          ? 'bg-[#6993cf]/20 text-[#6993cf] border border-[#6993cf]/30' 
           : 'bg-zinc-800 text-zinc-300 border border-zinc-700';
           
         return (

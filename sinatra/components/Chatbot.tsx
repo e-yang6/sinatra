@@ -334,7 +334,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
           <div className="flex items-center gap-2">
-            <Bot size={16} className="text-[#3b82f6]" />
+            <Bot size={16} className="text-[#6993cf]" />
             <span className="text-sm font-medium text-zinc-300">Frank</span>
             <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">OpenRouter</span>
           </div>
@@ -365,13 +365,13 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
             >
               {message.role === 'assistant' && (
                 <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 mt-1">
-                  <Bot size={12} className="text-[#3b82f6]" />
+                  <Bot size={12} className="text-[#6993cf]" />
                 </div>
               )}
               <div
                 className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${
                   message.role === 'user'
-                    ? 'bg-[#3b82f6]/20 text-zinc-200'
+                    ? 'bg-[#6993cf]/20 text-zinc-200'
                     : 'bg-zinc-900 border border-zinc-800 text-zinc-300'
                 }`}
               >
@@ -390,7 +390,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
                     [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-600 [&_blockquote]:pl-3 [&_blockquote]:my-1.5 [&_blockquote]:text-zinc-400 [&_blockquote]:italic
                     [&_strong]:text-zinc-200 [&_strong]:font-semibold
                     [&_em]:text-zinc-300
-                    [&_a]:text-[#3b82f6] [&_a]:underline
+                    [&_a]:text-[#6993cf] [&_a]:underline
                     [&_hr]:border-zinc-700 [&_hr]:my-2
                     [&_table]:text-xs [&_th]:px-2 [&_th]:py-1 [&_th]:border [&_th]:border-zinc-700 [&_td]:px-2 [&_td]:py-1 [&_td]:border [&_td]:border-zinc-700
                   ">
@@ -413,7 +413,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           {isLoading && (
             <div className="flex gap-3 justify-start">
               <div className="w-6 h-6 rounded-full bg-zinc-800 flex items-center justify-center shrink-0 mt-1">
-                <Bot size={12} className="text-[#3b82f6]" />
+                <Bot size={12} className="text-[#6993cf]" />
               </div>
               <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2">
                 <div className="flex gap-1">
@@ -447,7 +447,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
                 isListening
                   ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 animate-pulse'
                   : isTranscribing
-                    ? 'bg-[#3b82f6]/20 text-[#3b82f6] cursor-wait animate-pulse'
+                    ? 'bg-[#6993cf]/20 text-[#6993cf] cursor-wait animate-pulse'
                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
               title={isListening ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice input (Gradium STT)'}
@@ -470,7 +470,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
             <button
               onClick={handleSend}
               disabled={!input.trim() || isLoading || isListening || isTranscribing}
-              className="px-4 py-2 bg-[#3b82f6]/20 hover:bg-[#3b82f6]/30 text-[#3b82f6] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+              className="px-4 py-2 bg-[#6993cf]/20 hover:bg-[#6993cf]/30 text-[#6993cf] rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
               title="Send message"
             >
               <Send size={16} />

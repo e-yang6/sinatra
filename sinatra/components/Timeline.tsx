@@ -276,7 +276,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
           <div className="flex h-6 sticky top-0 z-30 bg-zinc-950 border-b border-zinc-800 select-none">
             <div className="w-32 shrink-0 sticky left-0 z-40 bg-zinc-950 border-b border-zinc-800 flex items-end px-2 pb-0.5">
-              <span className="text-[10px] font-mono" style={{ color: '#3b82f6' }}>{formatTime(playheadSec)}</span>
+              <span className="text-[10px] font-mono" style={{ color: '#6993cf' }}>{formatTime(playheadSec)}</span>
             </div>
             <div
               className="relative cursor-pointer h-full"
@@ -291,7 +291,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                 >
                   <div className={`h-full ${sec % 5 === 0 ? 'border-l border-zinc-700' : 'border-l border-zinc-800'}`} />
                   {sec % 5 === 0 && (
-                    <span className="absolute bottom-0.5 left-1 text-[10px] font-mono whitespace-nowrap" style={{ color: '#3b82f6' }}>
+                    <span className="absolute bottom-0.5 left-1 text-[10px] font-mono whitespace-nowrap" style={{ color: '#6993cf' }}>
                       {formatTime(sec)}
                     </span>
                   )}
@@ -506,7 +506,7 @@ export const Timeline: React.FC<TimelineProps> = ({
               className="absolute top-0 bottom-0 w-px z-20 pointer-events-none"
               style={{
                 left: CONTROLS_WIDTH + playheadPx,
-                backgroundColor: '#3b82f6',
+                backgroundColor: '#6993cf',
                 opacity: 0.7,
               }}
             />
@@ -519,7 +519,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                 top: 0,
                 width: '8px',
                 height: '8px',
-                backgroundColor: '#3b82f6',
+                backgroundColor: '#6993cf',
                 border: '1px solid rgba(201, 169, 97, 0.3)',
               }}
               onMouseDown={handlePlayheadMouseDown}

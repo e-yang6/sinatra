@@ -366,7 +366,7 @@ export const ProjectsPage: React.FC = () => {
                     <Filter size={12} />
                     Genre
                   </Label>
-                  <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-2 space-y-1.5 overflow-y-auto flex-1 min-h-0 custom-scrollbar">
+                  <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-2 space-y-1.5 overflow-y-auto flex-1 min-h-0 pr-1">
                     <button
                       onClick={() => setSelectedGenre(null)}
                       className={`w-full text-left px-2 py-1.5 text-xs rounded transition-colors flex-shrink-0 ${
@@ -403,24 +403,25 @@ export const ProjectsPage: React.FC = () => {
             {/* Header */}
             <div>
               <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
-                <span className="font-light text-zinc-100 tracking-tighter">Projects</span>
+                <span className="font-light text-[#6993cf] tracking-tighter">Projects</span>
               </h1>
               <p className="text-zinc-500 mt-1.5 text-sm">{totalProjects} {totalProjects === 1 ? 'project' : 'projects'}</p>
             </div>
 
-              {/* Projects Grid */}
-              <div className="flex-1 overflow-y-auto pr-1">
-                {filteredAndSortedProjects.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-center">
-                    <p className="text-zinc-500 mb-1 text-sm">
-                      {searchQuery || selectedGenre ? 'No projects found' : 'No projects yet'}
-                    </p>
-                    <p className="text-xs text-zinc-600">
-                      {searchQuery || selectedGenre ? 'Try adjusting your filters' : 'Create your first project to get started'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {/* Projects Grid */}
+              <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-xl p-3 flex-1 overflow-y-auto min-h-0">
+                  {filteredAndSortedProjects.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center">
+                      <p className="text-zinc-500 mb-1 text-sm">
+                        {searchQuery || selectedGenre ? 'No projects found' : 'No projects yet'}
+                      </p>
+                      <p className="text-xs text-zinc-600">
+                        {searchQuery || selectedGenre ? 'Try adjusting your filters' : 'Create your first project to get started'}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
                     {filteredAndSortedProjects.map((project) => (
                     <motion.button
                       key={project.id}
@@ -455,16 +456,14 @@ export const ProjectsPage: React.FC = () => {
                           </div>
                           <div className="flex flex-col gap-y-1.5 justify-between h-full">
                             <div>
-                              <div className="flex items-baseline gap-2 flex-wrap">
-                                <h2 className="text-lg font-semibold text-zinc-100 group-hover:text-white transition-colors">
-                                  {project.name}
-                                </h2>
-                                {project.genre && (
-                                  <span className="text-xs text-zinc-500 font-normal">
-                                    {project.genre}
-                                  </span>
-                                )}
-                              </div>
+                              <h2 className="text-lg font-semibold text-zinc-100 group-hover:text-white transition-colors">
+                                {project.name}
+                              </h2>
+                              {project.genre && (
+                                <p className="text-xs text-zinc-400 mt-0.5">
+                                  {project.genre}
+                                </p>
+                              )}
                               {project.description && (
                                 <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed mt-1">
                                   {project.description}
@@ -492,9 +491,10 @@ export const ProjectsPage: React.FC = () => {
                       </div>
                     </motion.button>
                   ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
           </div>
         </div>
 
@@ -503,7 +503,7 @@ export const ProjectsPage: React.FC = () => {
           <Card className="w-full h-full flex flex-col bg-zinc-900/50 border-zinc-800/50 backdrop-blur-sm">
             <CardHeader className="pb-4">
               <h1 className="text-4xl md:text-5xl font-semibold leading-tight">
-                <span className="font-light text-zinc-100 tracking-tighter">Create</span>
+                <span className="font-light text-[#6993cf] tracking-tighter">Create</span>
               </h1>
               <p className="text-zinc-500 mt-1.5 text-sm">Start a new composition</p>
             </CardHeader>
@@ -556,7 +556,7 @@ export const ProjectsPage: React.FC = () => {
                       onDragLeave={handleDragLeave}
                       className={`relative border-2 border-dashed rounded-lg p-4 transition-all ${
                         isDragging
-                          ? 'border-[#3b82f6] bg-[#3b82f6]/10'
+                          ? 'border-[#6993cf] bg-[#6993cf]/10'
                           : 'border-zinc-800 hover:border-zinc-700 bg-zinc-900/50'
                       }`}
                     >
@@ -583,7 +583,7 @@ export const ProjectsPage: React.FC = () => {
                           </p>
                           <p className="text-xs text-zinc-600 text-center mb-2">or</p>
                           <label className="cursor-pointer">
-                            <span className="text-xs text-[#3b82f6] hover:text-[#2563eb] transition-colors">
+                            <span className="text-xs text-[#6993cf] hover:text-[#5476a6] transition-colors">
                               Browse files
                             </span>
                             <input
