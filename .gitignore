@@ -1,16 +1,13 @@
 # Python
+venv/
+env/
+ENV/
+.venv/
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-venv/
-env/
-ENV/
-.venv
 *.egg-info/
-dist/
-build/
 *.egg
 
 # Backend uploads (user-uploaded audio files)
@@ -26,7 +23,14 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
+out/
 *.tsbuildinfo
+
+# Platforms & Caches
+.netlify/
+.vercel/
+.turbo/
+.cache/
 
 # IDE
 .vscode/
@@ -34,26 +38,29 @@ build/
 *.swp
 *.swo
 *~
-.DS_Store
 
 # Environment variables
 .env
 .env.local
 .env.*.local
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
 # Logs
 *.log
 logs/
 
 # OS
-Thumbs.db
 .DS_Store
+Thumbs.db
 desktop.ini
 
 # Temporary files
 *.tmp
 *.temp
-.cache/
 
 # Coverage reports
 .coverage
@@ -62,6 +69,3 @@ htmlcov/
 
 # Jupyter
 .ipynb_checkpoints
-
-# TypeScript
-*.tsbuildinfo
