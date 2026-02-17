@@ -90,12 +90,12 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Ready');
   const [error, setError] = useState<string | null>(null);
-  
+
   // ---- Audio visualization state ----
   const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  
+
   // ---- Terminal state ----
   const [terminalHeight, setTerminalHeight] = useState(220);
   const [recordingSessions, setRecordingSessions] = useState<Array<{
@@ -215,13 +215,26 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
   // ==================================
   //  METRONOME
   // ==================================
-  const startMetronome = useCallback((ctx: AudioContext, currentBpm: number) => {
+  const startMetronome = useCallback((ctx: AudioContext, currentBpm: number, playheadSec: number = 0) => {
     // Stop any existing metronome first
     clearInterval(metronomeTimerRef.current);
-    
+
     const beatSec = 60 / currentBpm;
-    let beat = 0;
-    nextBeatRef.current = ctx.currentTime;
+    // Calculate which beat we're on based on playhead position
+    const totalBeats = playheadSec / beatSec;
+    let beat = Math.floor(totalBeats) % BEATS_PER_BAR;
+    // Calculate time until the next beat boundary
+    const fractionalBeat = totalBeats - Math.floor(totalBeats);
+    const timeToNextBeat = (1 - fractionalBeat) * beatSec;
+    nextBeatRef.current = ctx.currentTime + timeToNextBeat;
+
+    // If we're very close to a beat boundary (< 10ms), schedule a click immediately
+    if (fractionalBeat < 0.01) {
+      nextBeatRef.current = ctx.currentTime;
+    } else {
+      // We'll land on the next beat, so advance the beat counter
+      beat = (beat + 1) % BEATS_PER_BAR;
+    }
 
     const scheduler = () => {
       // Recalculate beatSec in case BPM changed
@@ -260,7 +273,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
     } else {
       el.currentTime = 0;
     }
-    el.play().catch(() => {});
+    el.play().catch(() => { });
   }, [tracks]);
 
   const stopDrumPlayback = useCallback(() => {
@@ -291,7 +304,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
         if (el.duration) {
           if (sec < el.duration) {
             el.currentTime = sec;
-            if (el.paused) el.play().catch(() => {});
+            if (el.paused) el.play().catch(() => { });
           } else {
             el.pause();
           }
@@ -386,18 +399,18 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
       const frequencyData = new Uint8Array(analyser.frequencyBinCount);
       const waveformData = new Uint8Array(analyser.fftSize);
       const isRecordingRef = { current: true };
-      
+
       const updateLevels = () => {
         if (!analyserRef.current || !isRecordingRef.current) {
           animationFrameRef.current = null;
           return;
         }
-        
+
         // Get frequency data
         analyserRef.current.getByteFrequencyData(frequencyData);
         // Get waveform data for more accurate visualization
         analyserRef.current.getByteTimeDomainData(waveformData);
-        
+
         // Calculate peak and average levels
         let peak = 0;
         let sum = 0;
@@ -409,33 +422,33 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
         const avg = sum / waveformData.length;
         setCurrentPeakLevel(peak);
         setCurrentAvgLevel(avg);
-        
+
         // Use logarithmic scaling for better frequency representation
         // Map frequencies more accurately (lower frequencies get more bars)
         const numBars = 60;
         const levels: number[] = [];
-        
+
         for (let i = 0; i < numBars; i++) {
           // Logarithmic mapping for better frequency distribution
           const logIndex = Math.pow(i / numBars, 1.5) * frequencyData.length;
           const index = Math.floor(logIndex);
           const nextIndex = Math.min(index + 1, frequencyData.length - 1);
-          
+
           // Interpolate between adjacent bins for smoother visualization
           const value = frequencyData[index];
           const nextValue = frequencyData[nextIndex];
           const interpolated = value + (nextValue - value) * (logIndex - index);
-          
+
           // Normalize and apply smoothing
           const normalized = Math.min(1, interpolated / 255);
           levels.push(normalized);
         }
-        
+
         setAudioLevels(levels);
         animationFrameRef.current = requestAnimationFrame(updateLevels);
       };
       updateLevels();
-      
+
       // Store ref for cleanup
       (recordingTargetRef.current as any).isRecordingRef = isRecordingRef;
 
@@ -444,14 +457,14 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
       setIsRecording(true);
       setNotes([]);
       startTransport(0);
-      
+
       // Start drum playback only if not muted
       const drumTrack = tracks.find(t => t.id === '1');
       if (drumTrack && !drumTrack.isMuted) {
         startDrumPlayback(0);
       }
-      
-      if (metronome) startMetronome(ctx, bpm);
+
+      if (metronome) startMetronome(ctx, bpm, 0);
 
       // Play back all other recorded tracks from 0
       tracks.forEach(track => {
@@ -462,7 +475,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
         if (el?.src) {
           el.currentTime = 0;
           el.volume = track.volume;
-          el.play().catch(() => {});
+          el.play().catch(() => { });
         }
       });
 
@@ -472,7 +485,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
       console.error('[Sinatra] Mic error:', err);
       setError(err?.message || 'Could not access microphone');
       setStatusMessage('Error');
-      
+
       // Update the latest session if it exists to mark it as error
       setRecordingSessions(prev => {
         const updated = [...prev];
@@ -536,12 +549,12 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           offset += chunk.length;
         }
         const maxAmp = merged.reduce((max, s) => Math.max(max, Math.abs(s)), 0);
-        
+
         latestSession.endTime = endTime;
         latestSession.duration = totalSeconds;
         latestSession.sampleRate = sampleRate;
         latestSession.peakAmplitude = maxAmp;
-        
+
         if (chunks.length === 0) {
           latestSession.status = 'error';
           latestSession.message = 'No audio captured';
@@ -663,7 +676,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
 
     setIsProcessing(true);
     setError(null);
-    
+
     if (isRawAudio) {
       setStatusMessage('Storing raw audio...');
     } else {
@@ -762,7 +775,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
         if (ctx.state === 'suspended') {
           await ctx.resume();
         }
-        startMetronome(ctx, bpm);
+        startMetronome(ctx, bpm, playheadSec);
       }
 
       // Start drum from position (loops) - only if not muted
@@ -772,7 +785,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
         }
         drumAudioElRef.current.volume = drumTrack.volume;
-        drumAudioElRef.current.play().catch(() => {});
+        drumAudioElRef.current.play().catch(() => { });
       }
 
       // Play all non-muted tracks from position
@@ -784,7 +797,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           if (playheadSec < el.duration) {
             el.currentTime = playheadSec;
             el.volume = track.volume;
-            el.play().catch(() => {});
+            el.play().catch(() => { });
           }
         }
       });
@@ -848,9 +861,9 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           }
         }
       }
-      
+
       const updated = prev.map(t => t.id === id ? { ...t, ...updates } : t);
-      
+
       // Apply mute/unmute in real-time if playing
       if (updates.isMuted !== undefined) {
         const track = updated.find(t => t.id === id);
@@ -865,7 +878,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
                   drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
                 }
                 drumAudioElRef.current.volume = track.volume * masterVolume;
-                drumAudioElRef.current.play().catch(() => {});
+                drumAudioElRef.current.play().catch(() => { });
               }
             }
           } else {
@@ -878,14 +891,14 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
                 if (el.duration && playheadSec < el.duration) {
                   el.currentTime = playheadSec;
                   el.volume = track.volume * masterVolume;
-                  el.play().catch(() => {});
+                  el.play().catch(() => { });
                 }
               }
             }
           }
         }
       }
-      
+
       // Apply volume changes in real-time
       if (updates.volume !== undefined) {
         const track = updated.find(t => t.id === id);
@@ -901,7 +914,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           }
         }
       }
-      
+
       return updated;
     });
   };
@@ -922,7 +935,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
     if (isPlaying && !isRecording && audioCtxRef.current) {
       const ctx = audioCtxRef.current;
       if (ctx.state === 'closed') return;
-      
+
       if (metronome) {
         if (ctx.state === 'suspended') {
           ctx.resume().then(() => startMetronome(ctx, bpm));
@@ -946,7 +959,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
         setError('No tracks to export');
         return;
       }
-      
+
       const longestTrack = tracksWithAudio.reduce((longest, track) => {
         const longestDur = longest.audioDuration || 0;
         const trackDur = track.audioDuration || 0;
@@ -977,7 +990,7 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
   // ==============================
   const handleChatAction = useCallback((action: ChatAction) => {
     console.log('[Sinatra] Chat action:', action);
-    
+
     switch (action.type) {
       case 'ADD_TRACK': {
         const newId = addTrack();
@@ -1062,7 +1075,15 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           onAddTrack={addTrack}
           selectedTrackName={selectedTrack?.name || 'None'}
           isDrumSelected={selectedTrackId === '1'}
-          totalDuration={totalDuration}
+          totalDuration={0}
+          sampleName={undefined}
+          sampleNote={undefined}
+          musicalKey="C"
+          scaleType="chromatic"
+          quantize="off"
+          onKeyChange={() => { }}
+          onScaleChange={() => { }}
+          onQuantizeChange={() => { }}
         />
 
         <Timeline
@@ -1077,14 +1098,14 @@ const Editor: React.FC<EditorProps> = ({ projectId }) => {
           onAddTrack={addTrack}
           onDeleteTrack={handleDeleteTrack}
           onSeek={handleSeek}
-          onSelectClip={() => {}}
-          onUpdateClip={() => {}}
-          onMoveClipToTrack={() => {}}
+          onSelectClip={() => { }}
+          onUpdateClip={() => { }}
+          onMoveClipToTrack={() => { }}
         />
       </div>
 
-      <Terminal 
-        isRecording={isRecording} 
+      <Terminal
+        isRecording={isRecording}
         audioLevels={audioLevels}
         height={terminalHeight}
         onHeightChange={setTerminalHeight}

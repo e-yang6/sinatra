@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, Pause, Square, Mic, Volume2, Download, ArrowLeft } from 'lucide-react';
+import { Play, Pause, Square, Mic, Volume2, Download, ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { UserProfile } from './UserProfile';
 
@@ -18,6 +18,8 @@ interface HeaderProps {
   masterVolume?: number;
   onMasterVolumeChange?: (volume: number) => void;
   onExport?: () => void;
+  onSave?: () => void;
+  isSaving?: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -33,6 +35,8 @@ export const Header: React.FC<HeaderProps> = ({
   masterVolume = 1.0,
   onMasterVolumeChange,
   onExport,
+  onSave,
+  isSaving,
 }) => {
   const navigate = useNavigate();
 
@@ -47,9 +51,9 @@ export const Header: React.FC<HeaderProps> = ({
           <ArrowLeft size={12} />
           Back
         </button>
-        <img 
-          src={sinatraLogo} 
-          alt="SINATRA" 
+        <img
+          src={sinatraLogo}
+          alt="SINATRA"
           className="h-8 object-contain"
         />
       </div>
@@ -71,11 +75,10 @@ export const Header: React.FC<HeaderProps> = ({
           </button>
           <button
             onClick={onRecordToggle}
-            className={`w-8 h-8 flex items-center justify-center transition-colors border rounded-full ${
-              isRecording 
-                ? 'text-red-400 border-red-500/50' 
-                : 'text-zinc-300 hover:text-white border-zinc-700 hover:border-zinc-600'
-            }`}
+            className={`w-8 h-8 flex items-center justify-center transition-colors border rounded-full ${isRecording
+              ? 'text-red-400 border-red-500/50'
+              : 'text-zinc-300 hover:text-white border-zinc-700 hover:border-zinc-600'
+              }`}
           >
             <Mic size={16} />
           </button>
@@ -95,11 +98,10 @@ export const Header: React.FC<HeaderProps> = ({
           </div>
           <button
             onClick={onMetronomeToggle}
-            className={`text-xs px-2 py-1 rounded transition-colors font-mono ${
-              metronome
-                ? 'bg-zinc-700 text-zinc-200'
-                : 'text-zinc-500 hover:text-zinc-300'
-            }`}
+            className={`text-xs px-2 py-1 rounded transition-colors font-mono ${metronome
+              ? 'bg-zinc-700 text-zinc-200'
+              : 'text-zinc-500 hover:text-zinc-300'
+              }`}
           >
             Metronome
           </button>
@@ -130,6 +132,16 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <Download size={12} />
             Export
+          </button>
+        )}
+        {onSave && (
+          <button
+            onClick={onSave}
+            disabled={isSaving}
+            className="px-2.5 py-1 border border-emerald-500/30 rounded text-xs text-emerald-400/80 hover:text-emerald-400 hover:border-emerald-500/50 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isSaving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+            {isSaving ? 'Saving...' : 'Save'}
           </button>
         )}
         <UserProfile />

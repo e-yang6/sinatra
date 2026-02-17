@@ -16,7 +16,7 @@ const getApiBase = (): string => {
   return import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 };
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
 // For Vercel serverless functions, use relative paths in production
 // In development, call the backend directly
@@ -159,6 +159,113 @@ export async function reRenderMidi(midiFilename: string, instrument: string): Pr
   }
 
   return response.blob();
+}
+
+export interface MidiNote {
+  pitch: number;
+  start: number;
+  end: number;
+  velocity: number;
+}
+
+/**
+ * Get the list of notes from a MIDI file on the backend.
+ */
+export async function getMidiNotes(filename: string): Promise<MidiNote[]> {
+  const response = await fetch(`${API_BASE}/midi-notes?filename=${encodeURIComponent(filename)}`);
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to fetch notes' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.notes;
+}
+
+/**
+ * Update notes in a MIDI file and get back the re-rendered audio.
+ */
+export async function updateMidiNotes(
+  midiFilename: string,
+  notes: MidiNote[],
+  instrument: string
+): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/update-midi-notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      midi_filename: midiFilename,
+      notes,
+      instrument,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to update notes' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
+
+/**
+ * Generate a preview audio for a set of notes without saving.
+ */
+export async function previewMidiNotes(
+  notes: MidiNote[],
+  instrument: string
+): Promise<Blob> {
+  const response = await fetch(`${API_BASE}/preview-midi-notes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      notes,
+      instrument,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to generate preview' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  return response.blob();
+}
+
+/**
+ * Create a new empty MIDI file on the backend.
+ */
+export async function createEmptyMidiClip(filename: string, bpm: number): Promise<void> {
+  const response = await fetch(`${API_BASE}/create-empty-midi`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filename, bpm }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to create MIDI clip' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+}
+
+/**
+ * Download a MIDI file from a URL to the backend.
+ */
+export async function hydrateMidi(url: string, filename: string): Promise<string> {
+  const response = await fetch(`${API_BASE}/hydrate-midi`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url, filename }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: 'Failed to hydrate MIDI' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.filename;
 }
 
 

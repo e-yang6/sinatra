@@ -6,8 +6,10 @@ import { Terminal } from './components/Terminal';
 import { Chatbot } from './components/Chatbot';
 import VideoExportModal from './components/VideoExportModal';
 import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
-import { uploadDrum, uploadVocal, renderMidi, reRenderMidi, uploadSample, generateChords, ChatAction, ProjectContext } from './api';
+import { uploadDrum, uploadVocal, renderMidi, reRenderMidi, uploadSample, generateChords, ChatAction, ProjectContext, getMidiNotes, updateMidiNotes, MidiNote, createEmptyMidiClip, hydrateMidi, API_BASE } from './api';
 import { supabase } from './lib/supabase';
+import { useAuth } from './contexts/AuthContext';
+import { PianoRollEditor } from './components/PianoRollEditor';
 
 // ---- WAV encoding utility ----
 function encodeWav(samples: Float32Array, sampleRate: number): Blob {
@@ -65,6 +67,9 @@ interface DAWEditorProps {
 }
 
 const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
+  const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
+
   // ---- Core UI state ----
   const [isPlaying, setIsPlaying] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -75,6 +80,14 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedTrackId, setSelectedTrackId] = useState<string>('1');
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+
+  // ---- Piano Roll Editor state ----
+  const [editingClip, setEditingClip] = useState<{
+    clipId: string;
+    trackId: string;
+    midiFilename: string;
+    notes: MidiNote[];
+  } | null>(null);
 
   // ---- Backend state ----
   const [isProcessing, setIsProcessing] = useState(false);
@@ -142,6 +155,101 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     }
   }, [masterVolume, tracks]);
 
+  // ==================================
+  //  LOAD PROJECT
+  // ==================================
+  useEffect(() => {
+    if (!projectId || !user) return;
+
+    const load = async () => {
+      setStatusMessage('Loading project...');
+      setIsProcessing(true);
+
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (error || !data) {
+        console.error('Error loading project:', error);
+        setError('Project not found');
+        setIsProcessing(false);
+        return;
+      }
+
+      console.log('[Sinatra] Loaded project row:', data);
+      setProjectTitle(data.name);
+
+      try {
+        const p = data.data;
+        if (!p || Object.keys(p).length === 0) {
+          setIsProcessing(false);
+          setStatusMessage('Ready');
+          return;
+        }
+
+        if (p.bpm) setBpm(p.bpm);
+        if (p.musicalKey) setMusicalKey(p.musicalKey);
+        if (p.scaleType) setScaleType(p.scaleType);
+        if (p.quantize) setQuantize(p.quantize);
+        if (p.masterVolume) setMasterVolume(p.masterVolume);
+
+        if (p.tracks) {
+          const processedTracks = await Promise.all(p.tracks.map(async (t: TrackData) => {
+            const processedClips = await Promise.all((t.clips || []).map(async (c: Clip) => {
+              // Restore audioUrl from storageUrl (priority)
+              // Stale blob URLs from DB are invalid after reload
+              if (c.storageUrl) {
+                c.audioUrl = c.storageUrl;
+              }
+
+              // Restore clip audio elements
+              if (c.id && c.audioUrl) {
+                // We'll create elements after setTracks
+              }
+
+              // Hydrate backend if needed
+              // Only hydrate if we have a midiFilename AND storageUrl
+              if (c.midiFilename && c.storageUrl) {
+                try {
+                  // Ensure backend has the file
+                  await hydrateMidi(c.storageUrl, c.midiFilename);
+                } catch (e) {
+                  console.error(`Failed to hydrate ${c.midiFilename}`, e);
+                }
+              }
+              return c;
+            }));
+
+            return { ...t, clips: processedClips };
+          }));
+
+          setTracks(processedTracks);
+
+          // Re-create audio elements map
+          clipAudioMapRef.current.clear();
+          processedTracks.forEach(t => {
+            t.clips?.forEach(c => {
+              if (c.audioUrl) {
+                const el = new Audio(c.audioUrl);
+                clipAudioMapRef.current.set(c.id, el);
+              }
+            });
+          });
+        }
+      } catch (e) {
+        console.error('Error hydrating project:', e);
+        setError('Failed to load project data');
+      } finally {
+        setIsProcessing(false);
+        setStatusMessage('Ready');
+      }
+    };
+
+    load();
+  }, [projectId, user]);
+
   // ---- Audio for playback ----
   const clipAudioMapRef = useRef<Map<string, HTMLAudioElement>>(new Map());
   const clipTimeoutsRef = useRef<number[]>([]);
@@ -170,6 +278,94 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   // ---- Derived values ----
   const selectedTrack = tracks.find(t => t.id === selectedTrackId);
   const selectedInstrument = selectedTrack?.instrument || InstrumentType.PIANO;
+
+  // ==================================
+  //  SAVE PROJECT
+  // ==================================
+  const saveProject = async () => {
+    if (!user || !projectId) return;
+    setIsSaving(true);
+    const prevStatus = statusMessage;
+    setStatusMessage('Saving project...');
+
+    try {
+      // 1. Upload assets (audio blobs and MIDI files)
+      const updatedTracks = await Promise.all(tracks.map(async (track: TrackData) => {
+        if (!track.clips) return track;
+
+        const updatedClips = await Promise.all(track.clips.map(async (clip: Clip) => {
+          let newStorageUrl = clip.storageUrl;
+
+          if (clip.audioUrl.startsWith('blob:')) {
+            // New recording or render: upload blob
+            try {
+              const blob = await fetch(clip.audioUrl).then(r => r.blob());
+              const filename = `${user.id}/${projectId}/${clip.id}.wav`;
+              await supabase.storage.from('projects').upload(filename, blob, { upsert: true });
+              const { data } = supabase.storage.from('projects').getPublicUrl(filename);
+              newStorageUrl = data.publicUrl;
+            } catch (e) {
+              console.error("Failed to upload blob", clip.id, e);
+            }
+          } else if (clip.midiFilename && !clip.storageUrl) {
+            // Local MIDI file (from backend): fetch and upload
+            try {
+              const res = await fetch(`${API_BASE}/uploads/${clip.midiFilename}`);
+              if (res.ok) {
+                const blob = await res.blob();
+                const filename = `${user.id}/${projectId}/${clip.id}.mid`;
+                await supabase.storage.from('projects').upload(filename, blob, { upsert: true });
+                const { data } = supabase.storage.from('projects').getPublicUrl(filename);
+                newStorageUrl = data.publicUrl;
+              }
+            } catch (e) {
+              console.error("Failed to upload MIDI", clip.midiFilename, e);
+            }
+          }
+
+          return { ...clip, storageUrl: newStorageUrl };
+        }));
+
+        return { ...track, clips: updatedClips };
+      }));
+
+      // 2. Save JSON state
+      const projectData = {
+        bpm,
+        tracks: updatedTracks,
+        musicalKey,
+        scaleType,
+        quantize,
+        masterVolume,
+      };
+
+      console.log('[Sinatra] Saving project data:', projectData);
+      const { error, count } = await supabase.from('projects').update({
+        data: projectData,
+        updated_at: new Date().toISOString()
+      }, { count: 'exact' }).eq('id', projectId);
+
+      if (error) {
+        console.error('[Sinatra] Supabase update error:', error);
+        throw error;
+      }
+
+      if (count === 0) {
+        throw new Error('Save failed: Project not found or permission denied.');
+      }
+
+      setTracks(updatedTracks); // Update local state with new storageUrls
+      setStatusMessage('Project saved!');
+      setTimeout(() => setStatusMessage('Ready'), 2000);
+
+    } catch (e) {
+      console.error('Error saving project:', e);
+      setError('Failed to save project');
+      setStatusMessage(prevStatus);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // ==================================
   //  TRACK MANAGEMENT
@@ -269,10 +465,24 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   // ==================================
   //  METRONOME
   // ==================================
-  const startMetronome = useCallback((ctx: AudioContext, currentBpm: number) => {
+  const startMetronome = useCallback((ctx: AudioContext, currentBpm: number, playheadSec: number = 0) => {
     clearInterval(metronomeTimerRef.current);
-    let beat = 0;
-    nextBeatRef.current = ctx.currentTime;
+    const beatSec = 60 / currentBpm;
+    // Calculate which beat we're on based on playhead position
+    const totalBeats = playheadSec / beatSec;
+    let beat = Math.floor(totalBeats) % BEATS_PER_BAR;
+    // Calculate time until the next beat boundary
+    const fractionalBeat = totalBeats - Math.floor(totalBeats);
+    const timeToNextBeat = (1 - fractionalBeat) * beatSec;
+    nextBeatRef.current = ctx.currentTime + timeToNextBeat;
+
+    // If we're very close to a beat boundary (< 10ms), schedule a click immediately
+    if (fractionalBeat < 0.01) {
+      nextBeatRef.current = ctx.currentTime;
+    } else {
+      // We'll land on the next beat, so advance the beat counter
+      beat = (beat + 1) % BEATS_PER_BAR;
+    }
 
     const scheduler = () => {
       const currentBeatSec = 60 / bpm;
@@ -308,7 +518,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     } else {
       el.currentTime = 0;
     }
-    el.play().catch(() => {});
+    el.play().catch(() => { });
   }, [tracks, masterVolume]);
 
   const stopDrumPlayback = useCallback(() => {
@@ -344,7 +554,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         if (fromSec >= clip.startSec && fromSec < clipEnd) {
           // Playhead is inside clip ΓÇö play from correct audio position
           el.currentTime = audioOffset + (fromSec - clip.startSec);
-          el.play().catch(() => {});
+          el.play().catch(() => { });
           // Schedule stop at clip's trimmed end
           const remainingDuration = clipEnd - fromSec;
           const stopTid = window.setTimeout(() => { el.pause(); }, remainingDuration * 1000);
@@ -354,7 +564,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           const delayMs = (clip.startSec - fromSec) * 1000;
           const tid = window.setTimeout(() => {
             el.currentTime = audioOffset;
-            el.play().catch(() => {});
+            el.play().catch(() => { });
             // Schedule stop at clip's trimmed end
             const stopTid = window.setTimeout(() => { el.pause(); }, clip.durationSec * 1000);
             clipTimeoutsRef.current.push(stopTid);
@@ -394,6 +604,11 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       // Seek drum
       if (drumAudioElRef.current?.duration) {
         drumAudioElRef.current.currentTime = sec % drumAudioElRef.current.duration;
+      }
+
+      // Restart metronome if enabled
+      if (metronome && audioCtxRef.current) {
+        startMetronome(audioCtxRef.current, bpm, sec);
       }
 
       // Re-schedule clips from new position
@@ -541,7 +756,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         startDrumPlayback(recordStartSec);
       }
 
-      if (metronome) startMetronome(ctx, bpm);
+      if (metronome) startMetronome(ctx, bpm, recordStartSec);
 
       // Play other tracks' clips from position
       scheduleClipPlayback(recordStartSec, targetId);
@@ -842,7 +1057,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         if (ctx.state === 'suspended') {
           await ctx.resume();
         }
-        startMetronome(ctx, bpm);
+        startMetronome(ctx, bpm, playheadSec);
       }
 
       // Start drum from position (loops) - only if not muted
@@ -852,7 +1067,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
         }
         drumAudioElRef.current.volume = drumTrack.volume * masterVolume;
-        drumAudioElRef.current.play().catch(() => {});
+        drumAudioElRef.current.play().catch(() => { });
       }
 
       // Play all clips
@@ -973,6 +1188,60 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     }
   }, [tracks]);
 
+  // Handle double clicking on empty track space to create new MIDI clip
+  const handleTrackDoubleClick = useCallback(async (trackId: string, time: number) => {
+    const track = tracks.find(t => t.id === trackId);
+    if (!track || trackId === '1') return; // Don't create on drum track or invalid track
+
+    // Calculate 4 bars duration
+    const beatSec = 60 / bpm;
+    const barSec = beatSec * 4;
+    const duration = barSec * 4;
+
+    // Snap to nearest beat or bar? Let's snap to nearest beat for start
+    const snapBeat = Math.round(time / beatSec);
+    const startSec = snapBeat * beatSec;
+
+    const filename = `midi-${Date.now()}-${trackId}.mid`;
+    const clipId = `clip-midi-${Date.now()}-${nextClipIdRef.current++}`;
+
+    setStatusMessage('Creating new MIDI clip...');
+    try {
+      // Create backend file
+      await createEmptyMidiClip(filename, bpm);
+
+      // Create clip
+      const newClip: Clip = {
+        id: clipId,
+        startSec: startSec,
+        durationSec: duration,
+        audioUrl: '', // No audio yet
+        offsetSec: 0,
+        originalDurationSec: duration,
+        midiFilename: filename,
+      };
+
+      // Add to track
+      setTracks(prev => prev.map(t =>
+        t.id === trackId ? { ...t, clips: [...(t.clips || []), newClip] } : t
+      ));
+
+      // Open Editor
+      setEditingClip({
+        clipId,
+        trackId,
+        midiFilename: filename,
+        notes: [], // Empty notes for new clip
+      });
+      setStatusMessage('New clip created!');
+
+    } catch (err) {
+      console.error(err);
+      setStatusMessage('Failed to create clip');
+    }
+  }, [tracks, bpm]);
+
+
   // ==============================
   //  UNDO/REDO
   // ==============================
@@ -1029,7 +1298,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA';
-      
+
       // Ctrl+Z: Undo
       if (e.ctrlKey && e.key === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -1039,7 +1308,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         }
         return;
       }
-      
+
       // Ctrl+Y or Ctrl+Shift+Z: Redo
       if ((e.ctrlKey && e.key === 'y') || (e.ctrlKey && e.shiftKey && e.key === 'z')) {
         e.preventDefault();
@@ -1049,14 +1318,14 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         }
         return;
       }
-      
+
       // Spacebar: Play/Pause
       if (e.key === ' ' && !isInput) {
         e.preventDefault();
         handlePlayToggle();
         return;
       }
-      
+
       // Backspace/Delete: Delete selected clip
       if (e.key === 'Backspace' || e.key === 'Delete') {
         if (isInput) return;
@@ -1135,7 +1404,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
                   drumAudioElRef.current.currentTime = playheadSec % drumAudioElRef.current.duration;
                 }
                 drumAudioElRef.current.volume = track.volume * masterVolume;
-                drumAudioElRef.current.play().catch(() => {});
+                drumAudioElRef.current.play().catch(() => { });
               }
             }
           } else if (track.clips) {
@@ -1151,7 +1420,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
                   if (currentSec >= clip.startSec && currentSec < clipEnd) {
                     el.currentTime = (clip.offsetSec || 0) + (currentSec - clip.startSec);
                     el.volume = track.volume * masterVolume;
-                    el.play().catch(() => {});
+                    el.play().catch(() => { });
                   }
                 }
               }
@@ -1187,7 +1456,9 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       const ctx = audioCtxRef.current;
       if (ctx.state !== 'closed') {
         stopMetronome();
-        startMetronome(ctx, bpm);
+        // Calculate current playhead position for correct beat sync
+        const currentSec = playheadStartSecRef.current + (performance.now() - transportStartRef.current) / 1000;
+        startMetronome(ctx, bpm, currentSec);
       }
     }
   }, [bpm, isRecording, isPlaying, metronome, startMetronome, stopMetronome]);
@@ -1199,10 +1470,12 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       if (ctx.state === 'closed') return;
 
       if (metronome) {
+        // Calculate current playhead position for correct beat sync
+        const currentSec = playheadStartSecRef.current + (performance.now() - transportStartRef.current) / 1000;
         if (ctx.state === 'suspended') {
-          ctx.resume().then(() => startMetronome(ctx, bpm));
+          ctx.resume().then(() => startMetronome(ctx, bpm, currentSec));
         } else {
-          startMetronome(ctx, bpm);
+          startMetronome(ctx, bpm, currentSec);
         }
       } else {
         stopMetronome();
@@ -1260,7 +1533,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   // ==============================
   const handleChatAction = useCallback((action: ChatAction) => {
     console.log('[Sinatra] Chat action:', action);
-    
+
     switch (action.type) {
       case 'ADD_TRACK': {
         const newId = addTrack();
@@ -1415,6 +1688,8 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
         masterVolume={masterVolume}
         onMasterVolumeChange={setMasterVolume}
         onExport={handleExport}
+        onSave={saveProject}
+        isSaving={isSaving}
       />
 
       <div className="flex flex-1 overflow-hidden">
@@ -1439,7 +1714,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           onQuantizeChange={setQuantize}
         />
 
-        <div className="flex-1 overflow-hidden min-w-0">
+        <div className="flex-1 overflow-hidden min-w-0 relative">
           <Timeline
             playheadSec={playheadSec}
             tracks={tracks}
@@ -1455,7 +1730,92 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
             onSelectClip={handleSelectClip}
             onUpdateClip={handleUpdateClip}
             onMoveClipToTrack={handleMoveClipBetweenTracks}
+            onClipDoubleClick={async (clipId, trackId) => {
+              const track = tracks.find(t => t.id === trackId);
+              const clip = track?.clips?.find(c => c.id === clipId);
+              if (clip?.midiFilename) {
+                // Fetch notes and open editor
+                setStatusMessage('Loading notes...');
+                try {
+                  const notes = await getMidiNotes(clip.midiFilename);
+                  setEditingClip({
+                    clipId,
+                    trackId,
+                    midiFilename: clip.midiFilename,
+                    notes,
+                  });
+                  setStatusMessage('Piano Roll opened');
+                } catch (err) {
+                  console.error(err);
+                  setStatusMessage('Failed to load notes');
+                }
+              } else {
+                setStatusMessage('This clip has no MIDI data to edit');
+              }
+            }}
+            onTrackDoubleClick={handleTrackDoubleClick}
           />
+
+          {/* Piano Roll Modal */}
+          {editingClip && (() => {
+            const track = tracks.find(t => t.id === editingClip.trackId);
+            return (
+              <PianoRollEditor
+                notes={editingClip.notes}
+                instrument={track?.instrument || InstrumentType.PIANO}
+                trackName={track?.name || 'Unknown Track'}
+                onChange={(newNotes) => setEditingClip({ ...editingClip, notes: newNotes })}
+                onClose={async () => {
+                  // Save and close
+                  setIsProcessing(true);
+                  setStatusMessage('Saving notes and re-rendering...');
+                  const oldClip = editingClip; // capture closure
+                  setEditingClip(null); // Close immediately
+
+                  try {
+                    const track = tracks.find(t => t.id === oldClip.trackId);
+                    const instrument = track?.instrument || InstrumentType.PIANO;
+
+                    const audioBlob = await updateMidiNotes(oldClip.midiFilename, oldClip.notes, instrument);
+                    const newAudioUrl = URL.createObjectURL(audioBlob);
+
+                    setTracks(prev => prev.map(t => {
+                      if (t.id !== oldClip.trackId) return t;
+                      return {
+                        ...t,
+                        clips: (t.clips || []).map(c =>
+                          c.id === oldClip.clipId ? { ...c, audioUrl: newAudioUrl } : c
+                        )
+                      };
+                    }));
+
+                    // Update or create audio element
+                    let audioEl = clipAudioMapRef.current.get(oldClip.clipId);
+                    if (!audioEl) {
+                      audioEl = new Audio(newAudioUrl);
+                      clipAudioMapRef.current.set(oldClip.clipId, audioEl);
+                    } else {
+                      audioEl.src = newAudioUrl;
+                    }
+
+                    // Sync volume
+                    const currentTrack = tracks.find(t => t.id === oldClip.trackId);
+                    if (currentTrack) {
+                      audioEl.volume = currentTrack.volume * masterVolume;
+                    }
+
+                    setStatusMessage('Notes saved!');
+                  } catch (err) {
+                    console.error(err);
+                    setStatusMessage('Failed to save notes');
+                    setError('Failed to save notes');
+                  } finally {
+                    setIsProcessing(false);
+                  }
+                }}
+              />
+            );
+          })()}
         </div>
 
         <Chatbot

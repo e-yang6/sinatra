@@ -3,38 +3,38 @@ export enum InstrumentType {
   PIANO = 'Piano',
   ELECTRIC_PIANO = 'Electric Piano',
   HARPSICHORD = 'Harpsichord',
-  
+
   // Strings
   STRINGS = 'Strings',
   VIOLIN = 'Violin',
   CELLO = 'Cello',
-  
+
   // Brass
   TRUMPET = 'Trumpet',
   TROMBONE = 'Trombone',
   FRENCH_HORN = 'French Horn',
-  
+
   // Woodwinds
   FLUTE = 'Flute',
   SAXOPHONE = 'Saxophone',
   CLARINET = 'Clarinet',
-  
+
   // Synth
   SYNTH = 'Synth',
   SYNTH_PAD = 'Synth Pad',
   SYNTH_LEAD = 'Synth Lead',
-  
+
   // Bass
   BASS = 'Bass',
   ACOUSTIC_BASS = 'Acoustic Bass',
-  
+
   // Guitar
   GUITAR = 'Guitar',
   ELECTRIC_GUITAR = 'Electric Guitar',
-  
+
   // Other
   ORGAN = 'Organ',
-  
+
   // Raw audio (no MIDI conversion)
   RAW_AUDIO = 'Raw Audio',
 
@@ -64,6 +64,7 @@ export interface Clip {
   offsetSec: number;              // Trim offset into the audio file (seconds, for left-edge trim)
   originalDurationSec: number;    // Full untrimmed audio duration (seconds)
   midiFilename?: string;          // Backend MIDI filename for re-rendering with different instruments
+  storageUrl?: string;            // URL in Supabase Storage (for persistence)
 }
 
 export interface Note {

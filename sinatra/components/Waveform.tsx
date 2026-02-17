@@ -75,7 +75,7 @@ export const Waveform: React.FC<WaveformProps> = ({ audioUrl, numBars = 200, col
   }
 
   return (
-    <div className="w-full h-full flex items-center gap-[1px] px-1 opacity-90" style={{ transform: 'translateZ(0)' }}>
+    <div className="w-full h-full flex items-center gap-[1px] opacity-90" style={{ transform: 'translateZ(0)' }}>
       {waveformData.map((height, i) => (
         <div
           key={i}

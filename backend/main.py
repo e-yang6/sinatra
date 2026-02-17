@@ -21,16 +21,16 @@ except ImportError:
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 
 from services.bpm import detect_bpm
 from services.transcription import vocal_to_midi
-from services.synth import render_midi_to_wav
-from services.chat import chat as gemini_chat, clear_history as clear_chat_history
-from services.sampler import detect_base_pitch, render_with_sample
 from services.chords import generate_chord_progression
+from services.synth import INSTRUMENT_PROGRAMS, render_midi_to_wav
+from services.chat import chat as gemini_chat, clear_history as clear_chat_history
 from utils.file_helpers import save_upload, validate_wav, cleanup_file, UPLOAD_DIR
 
 # Verify Basic Pitch is available at startup
@@ -59,6 +59,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount uploads directory for direct access to generated files (crucial for persistence)
+if not os.path.exists(UPLOAD_DIR):
+    os.makedirs(UPLOAD_DIR)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
 # ----- In-memory state for the current session -----
 # For a hackathon demo, we just track the latest files.
@@ -385,13 +390,235 @@ async def re_render(
         filename="sinatra_rerendered.wav",
     )
 
+@app.get("/midi-notes")
+async def get_midi_notes(filename: str):
+    """
+    Get the list of notes from a MIDI file.
+    Returns: { "notes": [ { pitch, start, end, velocity }, ... ] }
+    """
+    midi_path = os.path.join(UPLOAD_DIR, filename)
+    if not os.path.exists(midi_path):
+        raise HTTPException(status_code=404, detail="MIDI file not found.")
+
+    try:
+        import pretty_midi
+        pm = pretty_midi.PrettyMIDI(midi_path)
+        notes = []
+        # We assume the first instrument is the one we want to edit
+        if len(pm.instruments) > 0:
+            for note in pm.instruments[0].notes:
+                notes.append({
+                    "pitch": note.pitch,
+                    "start": note.start,
+                    "end": note.end,
+                    "velocity": note.velocity
+                })
+        return {"notes": notes}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read MIDI: {e}")
+
+
+class CreateMidiRequest(BaseModel):
+    filename: str
+    bpm: float = 120.0
+
+
+@app.post("/create-empty-midi")
+async def create_empty_midi(request: CreateMidiRequest):
+    """
+    Create a new empty MIDI file.
+    """
+    try:
+        import pretty_midi
+        pm = pretty_midi.PrettyMIDI(initial_tempo=request.bpm)
+        # Create an empty instrument track
+        inst = pretty_midi.Instrument(program=0) # Piano
+        pm.instruments.append(inst)
+
+        midi_path = os.path.join(UPLOAD_DIR, request.filename)
+        pm.write(midi_path)
+        return {"filename": request.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create MIDI file: {e}")
+
+
+
+class HydrateMidiRequest(BaseModel):
+    url: str
+    filename: str
+
+
+@app.post("/hydrate-midi")
+async def hydrate_midi(request: HydrateMidiRequest):
+    """
+    Download a MIDI file from a URL (Supabase Storage) to the local uploads directory.
+    Required for the backend to process files that are stored in the cloud.
+    """
+    import requests
+    
+    try:
+        # Check if file already exists
+        file_path = os.path.join(UPLOAD_DIR, request.filename)
+        
+        # Download the file
+        response = requests.get(request.url)
+        response.raise_for_status()
+        
+        with open(file_path, "wb") as f:
+            f.write(response.content)
+            
+        return {"status": "ok", "filename": request.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to hydrate MIDI: {e}")
+
+
+class UpdateNotesRequest(BaseModel):
+    midi_filename: str
+    notes: list[dict] # { pitch, start, end, velocity }
+    instrument: str = "Piano"
+
+
+@app.post("/update-midi-notes")
+async def update_midi_notes(request: UpdateNotesRequest):
+    """
+    Update notes in a MIDI file and re-render the audio.
+    Returns the new WAV file.
+    """
+    midi_path = os.path.join(UPLOAD_DIR, request.midi_filename)
+    if not os.path.exists(midi_path):
+        raise HTTPException(status_code=404, detail="MIDI file not found.")
+
+    try:
+        import pretty_midi
+        pm = pretty_midi.PrettyMIDI(midi_path)
+        
+        # Replace notes in the first instrument
+        if len(pm.instruments) > 0:
+             # Keep the existing instrument program (sound)
+            inst = pm.instruments[0]
+            inst.notes = []
+            for n in request.notes:
+                inst.notes.append(pretty_midi.Note(
+                    velocity=int(n["velocity"]),
+                    pitch=int(n["pitch"]),
+                    start=float(n["start"]),
+                    end=float(n["end"])
+                ))
+        else:
+            # Create a new instrument if none exists
+            program = INSTRUMENT_PROGRAMS.get(request.instrument, 0)
+            inst = pretty_midi.Instrument(program=program)
+            for n in request.notes:
+                inst.notes.append(pretty_midi.Note(
+                    velocity=int(n["velocity"]),
+                    pitch=int(n["pitch"]),
+                    start=float(n["start"]),
+                    end=float(n["end"])
+                ))
+            pm.instruments.append(inst)
+
+        # Save unmodified MIDI
+        pm.write(midi_path)
+
+        # Render to WAV
+        if request.instrument == "Custom Sample":
+            sample_path = session.get("sample_path")
+            if not sample_path or not os.path.exists(sample_path):
+                raise HTTPException(
+                    status_code=400,
+                    detail="No sample uploaded. Upload a one-shot sample first.",
+                )
+            wav_path = render_with_sample(
+                midi_path,
+                sample_path,
+                base_pitch=session.get("sample_base_pitch"),
+            )
+        else:
+            wav_path = render_midi_to_wav(midi_path, instrument=request.instrument)
+
+        return FileResponse(
+            wav_path,
+            media_type="audio/wav",
+            filename="sinatra_updated.wav",
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update MIDI: {e}")
+
+
+class PreviewNotesRequest(BaseModel):
+    notes: list[dict] # { pitch, start, end, velocity }
+    instrument: str = "Piano"
+
+
+@app.post("/preview-midi-notes")
+async def preview_midi_notes(request: PreviewNotesRequest):
+    """
+    Generate a temporary audio preview for a set of notes.
+    Does NOT overwrite the original MIDI file.
+    Returns: WAV audio blob.
+    """
+    try:
+        import pretty_midi
+        
+        # Create a new MIDI object (120 BPM default, will be overridden by duration if needed)
+        pm = pretty_midi.PrettyMIDI(initial_tempo=120) 
+        
+        # Create instrument
+        program = INSTRUMENT_PROGRAMS.get(request.instrument, 0)
+        inst = pretty_midi.Instrument(program=program)
+        
+        for n in request.notes:
+            inst.notes.append(pretty_midi.Note(
+                velocity=int(n["velocity"]),
+                pitch=int(n["pitch"]),
+                start=float(n["start"]),
+                end=float(n["end"])
+            ))
+        pm.instruments.append(inst)
+
+        # Write to temp file
+        import time
+        temp_filename = f"preview_{int(time.time()*1000)}.mid"
+        temp_midi_path = os.path.join(UPLOAD_DIR, temp_filename)
+        pm.write(temp_midi_path)
+        
+        # Render to WAV
+        if request.instrument == "Custom Sample":
+            sample_path = session.get("sample_path")
+            if not sample_path or not os.path.exists(sample_path):
+                 # Fail gracefully? Or error? Let's error.
+                 cleanup_file(temp_midi_path)
+                 raise HTTPException(status_code=400, detail="No custom sample loaded.")
+            
+            wav_path = render_with_sample(
+                temp_midi_path,
+                sample_path,
+                base_pitch=session.get("sample_base_pitch")
+            )
+        else:
+            wav_path = render_midi_to_wav(temp_midi_path, instrument=request.instrument)
+        
+        # We need to read the file and return it, then delete it.
+        # fastAPI FileResponse streams it, so we can't delete immediately after returning.
+        
+        with open(wav_path, "rb") as f:
+            wav_data = f.read()
+            
+        # Cleanup temp files
+        cleanup_file(temp_midi_path)
+        cleanup_file(wav_path)
+        
+        from fastapi import Response
+        return Response(content=wav_data, media_type="audio/wav")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Preview failed: {e}")
 
 # ==================== CHORD GENERATION ====================
 
 
 class ChordRequest(BaseModel):
-    chords: list[str]             # e.g. ["C", "Am", "F", "G7"]
-    bpm: float = 120.0
     beats_per_chord: int = 4
     instrument: str = "Piano"
     octave_shift: int = 0         # -2 to +2

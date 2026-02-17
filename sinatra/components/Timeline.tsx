@@ -31,6 +31,8 @@ interface TimelineProps {
   onSelectClip: (clipId: string | null) => void;
   onUpdateClip: (trackId: string, clipId: string, updates: Partial<Clip>) => void;
   onMoveClipToTrack: (sourceTrackId: string, destTrackId: string, clipId: string, newStartSec: number) => void;
+  onClipDoubleClick?: (clipId: string, trackId: string) => void;
+  onTrackDoubleClick?: (trackId: string, time: number) => void;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -48,6 +50,8 @@ export const Timeline: React.FC<TimelineProps> = ({
   onSelectClip,
   onUpdateClip,
   onMoveClipToTrack,
+  onClipDoubleClick,
+  onTrackDoubleClick,
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
@@ -332,159 +336,176 @@ export const Timeline: React.FC<TimelineProps> = ({
                       boxShadow: `0 0 16px ${track.color || '#6366f1'}44, inset 0 0 0 2px ${track.color || '#6366f1'}88`,
                     } : {}}
                   >
-                  <Track
-                    track={track}
-                    isActive={true}
-                    isSelected={track.id === selectedTrackId}
-                    contentWidth={contentWidthPx}
-                    onSelect={() => onSelectTrack(track.id)}
-                    onVolumeChange={(vol) => onUpdateTrack(track.id, { volume: vol })}
-                    onMuteToggle={() => onUpdateTrack(track.id, { isMuted: !track.isMuted })}
-                    onColorChange={(color) => onUpdateTrack(track.id, { color })}
-                    onNameChange={(name) => onUpdateTrack(track.id, { name })}
-                    onSeek={(sec) => {
-                      onSelectClip(null);
-                      onSeek(sec);
-                    }}
-                    onDelete={track.id !== '1' ? () => onDeleteTrack(track.id) : undefined}
-                  >
-                    {isDrumTrack && track.audioUrl ? (
-                      /* ---- Drum track: single waveform ---- */
-                      <div
-                        className="h-full overflow-hidden cursor-pointer"
-                        style={{
-                          width: waveformWidthPx,
-                          background: 'rgba(39, 39, 42, 0.2)',
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = e.clientX - rect.left;
-                          const sec = Math.max(0, x / PIXELS_PER_SECOND);
-                          onSelectClip(null);
-                          onSeek(sec);
-                        }}
-                      >
-                        <Waveform audioUrl={track.audioUrl} numBars={numBars} color={track.color} />
-                      </div>
-                    ) : (track.clips && track.clips.length > 0) ? (
-                      /* ---- Track with clips: render positioned blocks ---- */
-                      <div
-                        className="relative w-full h-full"
-                        onClick={(e) => {
-                          if (e.target === e.currentTarget) {
+                    <Track
+                      track={track}
+                      isActive={true}
+                      isSelected={track.id === selectedTrackId}
+                      contentWidth={contentWidthPx}
+                      onSelect={() => onSelectTrack(track.id)}
+                      onVolumeChange={(vol) => onUpdateTrack(track.id, { volume: vol })}
+                      onMuteToggle={() => onUpdateTrack(track.id, { isMuted: !track.isMuted })}
+                      onColorChange={(color) => onUpdateTrack(track.id, { color })}
+                      onNameChange={(name) => onUpdateTrack(track.id, { name })}
+                      onSeek={(sec) => {
+                        onSelectClip(null);
+                        onSeek(sec);
+                      }}
+                      onDelete={track.id !== '1' ? () => onDeleteTrack(track.id) : undefined}
+                    >
+                      {isDrumTrack && track.audioUrl ? (
+                        /* ---- Drum track: single waveform ---- */
+                        <div
+                          className="h-full overflow-hidden cursor-pointer"
+                          style={{
+                            width: waveformWidthPx,
+                            background: 'rgba(39, 39, 42, 0.2)',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation();
                             const rect = e.currentTarget.getBoundingClientRect();
                             const x = e.clientX - rect.left;
                             const sec = Math.max(0, x / PIXELS_PER_SECOND);
                             onSelectClip(null);
                             onSeek(sec);
-                          }
-                        }}
-                      >
-                        {track.clips.map(clip => {
-                          const clipLeftPx = clip.startSec * PIXELS_PER_SECOND;
-                          const clipWidthPx = Math.max(8, clip.durationSec * PIXELS_PER_SECOND);
-                          const clipNumBars = Math.max(20, Math.floor(clipWidthPx / 3));
-                          const isClipSelected = clip.id === selectedClipId;
-                          const color = track.color || '#6366f1';
-                          const isDragging = draggingClip?.clipId === clip.id;
-                          const isResizing = resizingClip?.clipId === clip.id;
+                          }}
+                        >
+                          <Waveform audioUrl={track.audioUrl} numBars={numBars} color={track.color} />
+                        </div>
+                      ) : (track.clips && track.clips.length > 0) ? (
+                        /* ---- Track with clips: render positioned blocks ---- */
+                        <div
+                          className="relative w-full h-full"
+                          onClick={(e) => {
+                            if (e.target === e.currentTarget) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.clientX - rect.left;
+                              const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                              onSeek(sec);
+                            }
+                          }}
+                          onDoubleClick={(e) => {
+                            if (e.target === e.currentTarget && onTrackDoubleClick) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.clientX - rect.left;
+                              const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                              onTrackDoubleClick(track.id, sec);
+                            }
+                          }}
+                        >
+                          {track.clips.map(clip => {
+                            const clipLeftPx = clip.startSec * PIXELS_PER_SECOND;
+                            const clipWidthPx = Math.max(8, clip.durationSec * PIXELS_PER_SECOND);
+                            const clipNumBars = Math.max(20, Math.floor(clipWidthPx / 3));
+                            const isClipSelected = clip.id === selectedClipId;
+                            const color = track.color || '#6366f1';
+                            const isDragging = draggingClip?.clipId === clip.id;
+                            const isResizing = resizingClip?.clipId === clip.id;
 
-                          return (
-                            <div
-                              key={clip.id}
-                              className={`absolute top-1 bottom-1 rounded overflow-hidden select-none ${
-                                isAnyDrag ? '' : 'transition-shadow'
-                              } ${
-                                isDragging ? 'cursor-grabbing' : isResizing ? 'cursor-col-resize' : 'cursor-grab'
-                              }`}
-                              style={{
-                                left: clipLeftPx,
-                                width: clipWidthPx,
-                                backgroundColor: `${color}15`,
-                                border: isClipSelected
-                                  ? `2px solid ${color}`
-                                  : `1px solid ${color}55`,
-                                boxShadow: isClipSelected
-                                  ? `0 0 8px ${color}33`
-                                  : isDragging || isResizing
-                                    ? `0 0 12px ${color}44`
-                                    : 'none',
-                                zIndex: isClipSelected || isDragging || isResizing ? 10 : 1,
-                              }}
-                              onMouseDown={(e) => handleClipMouseDown(e, track.id, clip)}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onSelectClip(clip.id);
-                              }}
-                              title={`${clip.durationSec.toFixed(1)}s — drag to move, edges to resize, Backspace to delete`}
-                            >
-                              {/* Left resize handle */}
+                            return (
                               <div
-                                className="absolute left-0 top-0 bottom-0 w-1.5 z-20 cursor-col-resize group"
-                                onMouseDown={(e) => handleResizeMouseDown(e, track.id, clip, 'left')}
-                                title="Drag to trim start"
+                                key={clip.id}
+                                className={`absolute top-1 bottom-1 rounded overflow-hidden select-none ${isAnyDrag ? '' : 'transition-shadow'
+                                  } ${isDragging ? 'cursor-grabbing' : isResizing ? 'cursor-col-resize' : 'cursor-grab'
+                                  }`}
+                                style={{
+                                  left: clipLeftPx,
+                                  width: clipWidthPx,
+                                  backgroundColor: `${color}15`,
+                                  border: isClipSelected
+                                    ? `2px solid ${color}`
+                                    : `1px solid ${color}55`,
+                                  boxShadow: isClipSelected
+                                    ? `0 0 8px ${color}33`
+                                    : isDragging || isResizing
+                                      ? `0 0 12px ${color}44`
+                                      : 'none',
+                                  zIndex: isClipSelected || isDragging || isResizing ? 10 : 1,
+                                }}
+                                onMouseDown={(e) => handleClipMouseDown(e, track.id, clip)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onSelectClip(clip.id);
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onClipDoubleClick) onClipDoubleClick(clip.id, track.id);
+                                }}
+                                title={`${clip.durationSec.toFixed(1)}s — drag to move, edges to resize, Backspace to delete`}
                               >
-                                <div className="w-full h-full rounded-l opacity-0 group-hover:opacity-100 transition-opacity"
-                                  style={{ backgroundColor: `${color}66` }}
-                                />
-                              </div>
+                                {/* Left resize handle */}
+                                <div
+                                  className="absolute left-0 top-0 bottom-0 w-1.5 z-20 cursor-col-resize group"
+                                  onMouseDown={(e) => handleResizeMouseDown(e, track.id, clip, 'left')}
+                                  title="Drag to trim start"
+                                >
+                                  <div className="w-full h-full rounded-l opacity-0 group-hover:opacity-100 transition-opacity"
+                                    style={{ backgroundColor: `${color}66` }}
+                                  />
+                                </div>
 
-                              {/* Waveform content */}
-                              <div className="absolute inset-0 mx-1.5 overflow-hidden pointer-events-none">
-                                <Waveform
-                                  audioUrl={clip.audioUrl}
-                                  numBars={clipNumBars}
-                                  color={color}
-                                  offsetSec={clip.offsetSec || 0}
-                                  visibleDurationSec={clip.durationSec}
-                                />
-                              </div>
+                                {/* Waveform content */}
+                                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                                  <Waveform
+                                    audioUrl={clip.audioUrl}
+                                    numBars={clipNumBars}
+                                    color={color}
+                                    offsetSec={clip.offsetSec || 0}
+                                    visibleDurationSec={clip.durationSec}
+                                  />
+                                </div>
 
-                              {/* Right resize handle */}
-                              <div
-                                className="absolute right-0 top-0 bottom-0 w-1.5 z-20 cursor-col-resize group"
-                                onMouseDown={(e) => handleResizeMouseDown(e, track.id, clip, 'right')}
-                                title="Drag to trim end"
-                              >
-                                <div className="w-full h-full rounded-r opacity-0 group-hover:opacity-100 transition-opacity"
-                                  style={{ backgroundColor: `${color}66` }}
-                                />
-                              </div>
+                                {/* Right resize handle */}
+                                <div
+                                  className="absolute right-0 top-0 bottom-0 w-1.5 z-20 cursor-col-resize group"
+                                  onMouseDown={(e) => handleResizeMouseDown(e, track.id, clip, 'right')}
+                                  title="Drag to trim end"
+                                >
+                                  <div className="w-full h-full rounded-r opacity-0 group-hover:opacity-100 transition-opacity"
+                                    style={{ backgroundColor: `${color}66` }}
+                                  />
+                                </div>
 
-                              {/* Clip duration label */}
-                              <div
-                                className="absolute bottom-0.5 right-2 text-[8px] font-mono opacity-50 pointer-events-none"
-                                style={{ color }}
-                              >
-                                {clip.durationSec.toFixed(1)}s
+                                {/* Clip duration label */}
+                                <div
+                                  className="absolute bottom-0.5 right-2 text-[8px] font-mono opacity-50 pointer-events-none"
+                                  style={{ color }}
+                                >
+                                  {clip.durationSec.toFixed(1)}s
+                                </div>
                               </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : !isDrumTrack ? (
-                      /* ---- Empty non-drum track ---- */
-                      <div
-                        className="w-full h-full flex items-center justify-center text-zinc-700 text-xs"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const rect = e.currentTarget.getBoundingClientRect();
-                          const x = e.clientX - rect.left;
-                          const sec = Math.max(0, x / PIXELS_PER_SECOND);
-                          onSelectClip(null);
-                          onSeek(sec);
-                        }}
-                      >
-                        Empty — record to add clips
-                      </div>
-                    ) : (
-                      /* ---- Empty drum track ---- */
-                      <div className="w-full h-full flex items-center justify-center text-zinc-700 text-xs">
-                        Upload a drum loop
-                      </div>
-                    )}
-                  </Track>
+                            );
+                          })}
+                        </div>
+                      ) : !isDrumTrack ? (
+                        /* ---- Empty non-drum track ---- */
+                        <div
+                          className="w-full h-full flex items-center justify-center text-zinc-700 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const x = e.clientX - rect.left;
+                            const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                            onSelectClip(null);
+                            onSeek(sec);
+                          }}
+                          onDoubleClick={(e) => {
+                            if (onTrackDoubleClick) {
+                              const rect = e.currentTarget.getBoundingClientRect();
+                              const x = e.clientX - rect.left;
+                              const sec = Math.max(0, x / PIXELS_PER_SECOND);
+                              onTrackDoubleClick(track.id, sec);
+                            }
+                          }}
+                        >
+                          Empty — record to add clips
+                        </div>
+                      ) : (
+                        /* ---- Empty drum track ---- */
+                        <div className="w-full h-full flex items-center justify-center text-zinc-700 text-xs">
+                          Upload a drum loop
+                        </div>
+                      )}
+                    </Track>
                   </div>
                 );
               })}
