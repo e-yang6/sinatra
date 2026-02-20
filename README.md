@@ -187,4 +187,4 @@ Project Audio → FFmpeg (Browser) → Three.js Visualizer → Canvas Rendering 
 
 ## Links
 
-- GitHub Repository: https://github.com/e-yang6/sinatra
+- Try it out: sinatra-daw.vercel.app/ 
