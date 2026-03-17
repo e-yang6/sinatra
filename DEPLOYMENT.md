@@ -8,8 +8,8 @@
 3. **Missing environment variable handling** ❌ - No environment-aware API routing
 
 ### Architecture Issues:
-- Chat endpoint uses `OPENROUTER_API_KEY` (secret) - should be serverless
-- Voice transcription uses `GRADIUM_API_KEY` (secret) - must stay on Python backend (Python-only library)
+- Chat endpoint uses `GEMINI_API_KEY` (secret) - should be serverless
+- Voice transcription uses the browser Web Speech API - no backend secret required
 - All other endpoints are safe (no secrets, just processing)
 
 ---
@@ -19,11 +19,11 @@
 ### 1. Created Vercel Serverless Functions
 
 **Files Created:**
-- `api/chat.ts` - Handles chat requests using OpenRouter API
+- `api/chat.ts` - Handles chat requests using Gemini API
 - `api/chat/clear.ts` - Clears chat history
 
 **Why Serverless:**
-- Keeps `OPENROUTER_API_KEY` secret (never exposed to frontend)
+- Keeps `GEMINI_API_KEY` secret (never exposed to frontend)
 - Better scalability and cost efficiency
 - Automatic deployment with Vercel
 
@@ -53,7 +53,7 @@
 ```
 sinatra/
 ├── api/                    # Vercel serverless functions
-│   ├── chat.ts            # OpenRouter chat endpoint
+│   ├── chat.ts            # Gemini chat endpoint
 │   └── chat/
 │       └── clear.ts       # Clear chat history
 ├── sinatra/               # Frontend React app
@@ -70,25 +70,23 @@ sinatra/
 
 #### Frontend Variables (VITE_* prefix):
 ```
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_BACKEND_URL=https://your-backend.railway.app  # Your Python backend URL
 ```
 
 #### Serverless Function Variables (No prefix):
 ```
-OPENROUTER_API_KEY=sk-or-v1-...
-OPENROUTER_MODEL=google/gemini-2.0-flash-001  # Optional, has default
+GEMINI_API_KEY=AIza...
+GEMINI_MODEL=gemini-2.0-flash  # Optional, has default
 ```
 
 ### Backend Environment Variables (Set in your backend hosting - Railway/Render/etc.)
 
 ```
-OPENROUTER_API_KEY=sk-or-v1-...  # Only if backend still handles chat (legacy)
-GRADIUM_API_KEY=gsk_...          # Required for voice transcription
+GEMINI_API_KEY=AIza...           # Only if backend handles chat in local/dev mode
+GEMINI_MODEL=gemini-2.0-flash    # Optional
 ```
 
-**Note:** After migration, `OPENROUTER_API_KEY` is only needed in Vercel, not the backend.
+**Note:** In production, `GEMINI_API_KEY` is needed in your server environment. Voice input runs in the browser.
 
 ---
 
@@ -98,9 +96,9 @@ GRADIUM_API_KEY=gsk_...          # Required for voice transcription
 **Symptom:** All audio processing (upload-vocal, render, etc.) fails with network errors
 **Fix:** Set `VITE_BACKEND_URL` in Vercel environment variables to your backend URL
 
-### 2. Missing `OPENROUTER_API_KEY` in Vercel
-**Symptom:** Chat returns "Chat is unavailable: OPENROUTER_API_KEY environment variable is not set"
-**Fix:** Add `OPENROUTER_API_KEY` (without VITE_ prefix) in Vercel environment variables
+### 2. Missing `GEMINI_API_KEY` in Vercel
+**Symptom:** Chat returns "Chat is unavailable: GEMINI_API_KEY environment variable is not set"
+**Fix:** Add `GEMINI_API_KEY` (without VITE_ prefix) in Vercel environment variables
 
 ### 3. Backend Not Deployed
 **Symptom:** Audio uploads, MIDI rendering, chord generation all fail
@@ -133,14 +131,13 @@ app.add_middleware(
 - [ ] Backend running on `localhost:8000`
 - [ ] Frontend running on `localhost:3000`
 - [ ] Chat works (calls backend `/chat`)
-- [ ] Voice transcription works (calls backend `/voice-transcribe`)
+- [ ] Voice transcription works in a supported browser (Chrome/Edge)
 - [ ] Audio uploads work
 - [ ] MIDI rendering works
 
 ### Production:
 - [ ] `VITE_BACKEND_URL` set in Vercel
-- [ ] `OPENROUTER_API_KEY` set in Vercel (no VITE_ prefix)
-- [ ] `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` set
+- [ ] `GEMINI_API_KEY` set in Vercel (no VITE_ prefix)
 - [ ] Backend deployed and accessible
 - [ ] Chat works (calls `/api/chat` serverless function)
 - [ ] Voice transcription works (calls backend)
@@ -158,9 +155,7 @@ Deploy your Python FastAPI backend to Railway, Render, or Fly.io
 Add to Vercel project settings:
 ```
 VITE_BACKEND_URL=https://sinatra-backend.railway.app
-OPENROUTER_API_KEY=sk-or-v1-...
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
+GEMINI_API_KEY=AIza...
 ```
 
 ### Step 3: Deploy Frontend
@@ -186,15 +181,15 @@ Push to GitHub (or your connected repo) - Vercel will auto-deploy
 2. `api/chat/clear.ts` - Serverless clear history endpoint
 
 ### Files Deleted:
-- None (voice-transcribe stays on backend - Python-only)
+- None (voice input runs in-browser via Web Speech API)
 
 ---
 
-## 🎯 Architecture Decision: Why Voice-Transcribe Stays on Backend
+## 🎯 Architecture Decision: Why Voice Input Runs In The Browser
 
-**Gradium is a Python library** - it cannot run in Node.js serverless functions. Therefore:
-- ✅ Chat → Vercel serverless (Node.js, uses OpenRouter API)
-- ✅ Voice-transcribe → Python backend (Python, uses Gradium SDK)
+**Web Speech API is built into supported browsers**. Therefore:
+- ✅ Chat → Vercel serverless or backend (uses Gemini API)
+- ✅ Voice input → Browser (no backend speech service needed)
 - ✅ All other endpoints → Python backend (no secrets, just processing)
 
 This is the correct architecture for your stack.
@@ -206,7 +201,7 @@ This is the correct architecture for your stack.
 1. **Never commit `.env` files** - All secrets must be in Vercel environment variables
 2. **Backend must be deployed separately** - Vercel only hosts the frontend and serverless functions
 3. **CORS must be configured** - Backend must allow requests from your Vercel domain
-4. **Environment variables are case-sensitive** - `OPENROUTER_API_KEY` not `openrouter_api_key`
+4. **Environment variables are case-sensitive** - `GEMINI_API_KEY` not `gemini_api_key`
 5. **VITE_ prefix required** - Frontend can only access variables starting with `VITE_`
 6. **Serverless functions use `process.env`** - No `VITE_` prefix needed for serverless functions
 
@@ -215,7 +210,7 @@ This is the correct architecture for your stack.
 ## 🆘 Troubleshooting
 
 ### Chat returns "API key not set"
-- Check `OPENROUTER_API_KEY` is set in Vercel (not in frontend env vars)
+- Check `GEMINI_API_KEY` is set in Vercel or backend env (not in frontend env vars)
 - Redeploy after adding environment variables
 
 ### All API calls fail with network errors

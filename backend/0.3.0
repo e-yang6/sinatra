@@ -1,0 +1,36 @@
+Collecting basic-pitch
+  Using cached basic_pitch-0.4.0-py2.py3-none-any.whl.metadata (12 kB)
+Collecting librosa>=0.8.0 (from basic-pitch)
+  Using cached librosa-0.11.0-py3-none-any.whl.metadata (8.7 kB)
+Collecting mir-eval>=0.6 (from basic-pitch)
+  Using cached mir_eval-0.8.2-py3-none-any.whl.metadata (3.0 kB)
+Collecting numpy>=1.18 (from basic-pitch)
+  Using cached numpy-2.4.3-cp312-cp312-win_amd64.whl.metadata (6.6 kB)
+Collecting pretty-midi>=0.2.9 (from basic-pitch)
+  Using cached pretty_midi-0.2.11-py3-none-any.whl
+Collecting resampy<0.4.3,>=0.2.2 (from basic-pitch)
+  Using cached resampy-0.4.2-py3-none-any.whl.metadata (2.8 kB)
+Collecting scikit-learn (from basic-pitch)
+  Using cached scikit_learn-1.8.0-cp312-cp312-win_amd64.whl.metadata (11 kB)
+Collecting scipy>=1.4.1 (from basic-pitch)
+  Using cached scipy-1.17.1-cp312-cp312-win_amd64.whl.metadata (60 kB)
+Requirement already satisfied: typing-extensions in C:\Users\tteth\Downloads\sinatra\venv\Lib\site-packages (from basic-pitch) (4.15.0)
+INFO: pip is looking at multiple versions of basic-pitch to determine which version is compatible with other requirements. This could take a while.
+Collecting basic-pitch
+  Using cached basic_pitch-0.3.3-py2.py3-none-any.whl.metadata (12 kB)
+  Using cached basic_pitch-0.3.2-py2.py3-none-any.whl.metadata (12 kB)
+  Using cached basic_pitch-0.3.1-py2.py3-none-any.whl.metadata (12 kB)
+  Using cached basic-pitch-0.3.0.tar.gz (3.5 MB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'
+  Preparing metadata (pyproject.toml): started
+  Preparing metadata (pyproject.toml): finished with status 'done'
+  Using cached basic_pitch-0.2.6-py2.py3-none-any.whl.metadata (1.9 kB)
+Collecting numpy<1.24,>=1.18 (from basic-pitch)
+  Using cached numpy-1.23.5.tar.gz (10.7 MB)
+  Installing build dependencies: started
+  Installing build dependencies: finished with status 'done'
+  Getting requirements to build wheel: started
+  Getting requirements to build wheel: finished with status 'done'

@@ -21,7 +21,7 @@ export const SignUpPageRoute: React.FC = () => {
     if (error) {
       setError(error.message);
     } else {
-      setMessage('Check your email to confirm your account!');
+      setMessage('Account created. You can sign in now.');
       setTimeout(() => {
         navigate('/signin');
       }, 3000);

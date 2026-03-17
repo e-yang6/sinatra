@@ -42,7 +42,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, initialMo
         if (error) {
           setError(error.message);
         } else {
-          setMessage('Check your email to confirm your account!');
+          setMessage('Account created. Sign in with your new credentials.');
           setTimeout(() => {
             setMode('signin');
             setMessage(null);

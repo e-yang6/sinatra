@@ -23,8 +23,8 @@ from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import Optional
+from pydantic import BaseModel, Field
+from typing import List, Optional
 
 from services.bpm import detect_bpm
 from services.transcription import vocal_to_midi
@@ -451,8 +451,8 @@ class HydrateMidiRequest(BaseModel):
 @app.post("/hydrate-midi")
 async def hydrate_midi(request: HydrateMidiRequest):
     """
-    Download a MIDI file from a URL (Supabase Storage) to the local uploads directory.
-    Required for the backend to process files that are stored in the cloud.
+    Download a MIDI file from a remote URL to the local uploads directory.
+    Required for the backend to process files that are stored outside the backend runtime.
     """
     import requests
     
@@ -619,6 +619,8 @@ async def preview_midi_notes(request: PreviewNotesRequest):
 
 
 class ChordRequest(BaseModel):
+    chords: List[str] = Field(default_factory=list)
+    bpm: float = 120.0
     beats_per_chord: int = 4
     instrument: str = "Piano"
     octave_shift: int = 0         # -2 to +2
@@ -663,45 +665,6 @@ async def generate_chords_endpoint(request: ChordRequest):
 
 
 # ==================== CHAT ENDPOINTS ====================
-
-
-class VoiceTranscribeResponse(BaseModel):
-    text: str
-
-
-@app.post("/voice-transcribe")
-async def voice_transcribe(file: UploadFile = File(...)):
-    """
-    Transcribe audio to text using the Gradium SDK.
-    Accepts WAV audio files from the frontend.
-    Returns the transcribed text.
-    """
-    gradium_api_key = os.environ.get("GRADIUM_API_KEY")
-    if not gradium_api_key:
-        raise HTTPException(status_code=500, detail="GRADIUM_API_KEY not configured on server.")
-
-    try:
-        import gradium
-    except ImportError:
-        raise HTTPException(status_code=500, detail="gradium package not installed. Run: pip install gradium")
-
-    audio_data = await file.read()
-    if len(audio_data) == 0:
-        raise HTTPException(status_code=400, detail="Empty audio file.")
-
-    try:
-        client = gradium.GradiumClient(
-            api_key=gradium_api_key,
-            base_url="https://us.api.gradium.ai/api/",
-        )
-        result = await client.stt(
-            setup=gradium.STTSetup(input_format="wav"),
-            audio=audio_data,
-        )
-        return {"text": result.text.strip() if result.text else ""}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}")
-
 
 class ChatRequest(BaseModel):
     message: str

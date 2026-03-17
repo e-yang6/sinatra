@@ -95,11 +95,11 @@ Frontend runs at **http://localhost:3000**
 - **Playhead seeking** - jump to any point in the timeline for recording or playback
 - **Track customization** - color, volume, mute, solo, and dynamic naming
 - **Raw audio recording** with client-side normalization
-- **AI assistant (Frank)** - voice-controlled DAW with speech-to-text via Gradium
+- **AI assistant (Frank)** - voice-controlled DAW with browser speech recognition
 - **Undo/Redo system** with keyboard shortcuts (Ctrl+Z, Ctrl+Y)
 - **Export functionality** - render as WAV audio or MP4 video with 3D visualizer
-- **Project management** - create, edit, delete, and organize projects with Supabase
-- **User authentication** - secure sign-in and project storage
+- **Project management** - create, edit, delete, and organize projects locally in the browser
+- **User authentication** - local sign-in for personal project access
 
 ---
 
@@ -118,7 +118,7 @@ Audio Upload → Base Pitch Detection (Librosa) → MIDI Note Mapping → Pitch 
 Natural Language Request → AI Parsing → Chord Progression → MIDI Generation → FluidSynth Rendering → Track Addition
 
 **AI Assistant Pipeline**  
-Voice Input (Gradium STT) → Text Processing → OpenRouter API → Action Detection → DAW Control Commands
+Voice Input (Web Speech API) → Text Processing → Gemini API → Action Detection → DAW Control Commands
 
 **Export Pipeline**  
 Project Audio → FFmpeg (Browser) → Three.js Visualizer → Canvas Rendering → Video Encoding → MP4/WAV Export
@@ -132,12 +132,12 @@ Project Audio → FFmpeg (Browser) → Three.js Visualizer → Canvas Rendering 
 | Frontend | React, TypeScript, Vite, Tailwind CSS |
 | Backend | Python, FastAPI, Uvicorn |
 | Audio Processing | Librosa, Pretty MIDI, PyFluidSynth, Soundfile, Basic Pitch |
-| Speech Recognition | Gradium STT (WebSocket) |
-| AI/ML | Spotify Basic Pitch, OpenRouter (Gemini), Google Generative AI |
+| Speech Recognition | Web Speech API |
+| AI/ML | Spotify Basic Pitch, Gemini API, Google Generative AI |
 | 3D Graphics | Three.js |
 | Video/Audio Export | FFmpeg.wasm, MediaRecorder API |
-| Database | Supabase (PostgreSQL) |
-| Authentication | Supabase Auth |
+| Storage | Browser localStorage |
+| Authentication | Local browser auth |
 | Audio APIs | Web Audio API, MediaRecorder API |
 
 ---
@@ -153,9 +153,9 @@ Project Audio → FFmpeg (Browser) → Three.js Visualizer → Canvas Rendering 
 7. Custom samples can be uploaded - system detects base pitch and pitch-shifts for MIDI notes.
 8. Multiple tracks can be recorded and layered for complex compositions.
 9. Clips can be moved, resized, and dragged between tracks (auto re-renders).
-10. AI assistant (Frank) processes voice/text commands via Gradium STT and OpenRouter.
+10. AI assistant (Frank) processes voice/text commands via the Web Speech API and Gemini.
 11. Chord progressions can be generated through natural language requests.
-12. Projects are saved to Supabase with track data, clips, and settings.
+12. Projects are saved locally in the browser with track data, clips, and settings.
 13. Final compositions can be exported as WAV audio or MP4 video with 3D visualizer.
 
 ---

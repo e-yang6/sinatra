@@ -1,5 +1,5 @@
 """
-Chat service — OpenRouter AI integration for Sinatra.
+Chat service — Gemini API integration for Sinatra.
 Handles conversation with project context and action parsing.
 """
 
@@ -10,9 +10,9 @@ import httpx
 from typing import Optional
 
 # --- Configuration ---
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.0-flash-001")
-OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 SYSTEM_PROMPT = """You are Frank, a music production assistant for Sinatra, a web-based DAW (Digital Audio Workstation). You help users create music, suggest instruments, explain music theory, and can execute commands to control the DAW.
 
@@ -86,6 +86,16 @@ Always be helpful, concise, and musically knowledgeable. If the user provides pr
 conversation_history: list[dict] = []
 
 
+def _normalize_gemini_model(model_name: str) -> str:
+    """Accept common env formats and convert them to a Gemini model id."""
+    normalized = (model_name or "gemini-2.5-flash").strip()
+    normalized = normalized.removeprefix("models/")
+    if "/" in normalized:
+        normalized = normalized.split("/")[-1]
+    normalized = normalized.removesuffix(":generateContent")
+    return normalized or "gemini-2.5-flash"
+
+
 def _build_context_message(context: Optional[dict]) -> str:
     """Build a context string from the project state."""
     if not context:
@@ -152,12 +162,12 @@ def strip_action_blocks(response_text: str) -> str:
 
 def chat(message: str, context: Optional[dict] = None) -> dict:
     """
-    Send a message to OpenRouter and get a response.
+    Send a message to Gemini and get a response.
     Returns { "response": str, "actions": list[dict] }
     """
-    if not OPENROUTER_API_KEY:
+    if not GEMINI_API_KEY:
         return {
-            "response": "Chat is unavailable: OPENROUTER_API_KEY environment variable is not set.",
+            "response": "Chat is unavailable: GEMINI_API_KEY environment variable is not set.",
             "actions": [],
         }
     
@@ -178,37 +188,44 @@ def chat(message: str, context: Optional[dict] = None) -> dict:
         conversation_history[:] = conversation_history[-40:]
     
     try:
-        # Build messages with system prompt
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            *conversation_history,
+        model_name = _normalize_gemini_model(GEMINI_MODEL)
+        contents = [
+            {
+                "role": "user" if item["role"] == "user" else "model",
+                "parts": [{"text": item["content"]}],
+            }
+            for item in conversation_history
         ]
-        
-        # Call OpenRouter API
+
         response = httpx.post(
-            OPENROUTER_API_URL,
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "http://localhost:3000",
-                "X-Title": "Sinatra Music App",
-            },
+            f"{GEMINI_API_URL}/{model_name}:generateContent",
+            params={"key": GEMINI_API_KEY},
+            headers={"Content-Type": "application/json"},
             json={
-                "model": OPENROUTER_MODEL,
-                "messages": messages,
-                "temperature": 0.7,
-                "max_tokens": 1024,
+                "system_instruction": {
+                    "parts": [{"text": SYSTEM_PROMPT}],
+                },
+                "contents": contents,
+                "generationConfig": {
+                    "temperature": 0.7,
+                    "maxOutputTokens": 1024,
+                },
             },
             timeout=30.0,
         )
-        
+
         if response.status_code != 200:
             error_data = response.json()
             error_msg = error_data.get("error", {}).get("message", f"HTTP {response.status_code}")
             raise RuntimeError(error_msg)
-        
+
         data = response.json()
-        response_text = data["choices"][0]["message"]["content"] or "I couldn't generate a response."
+        response_text = "".join(
+            part.get("text", "")
+            for part in data.get("candidates", [{}])[0]
+            .get("content", {})
+            .get("parts", [])
+        ).strip() or "I couldn't generate a response."
         
         # Add assistant response to history
         conversation_history.append({

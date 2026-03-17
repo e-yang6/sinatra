@@ -111,6 +111,16 @@ Always be helpful, concise, and musically knowledgeable. If the user provides pr
 // In production, consider using Vercel KV or similar for persistence
 const conversationHistory: Array<{ role: string; content: string }> = [];
 
+function normalizeGeminiModel(modelName?: string): string {
+  let normalized = (modelName || 'gemini-2.5-flash').trim();
+  normalized = normalized.replace(/^models\//, '');
+  if (normalized.includes('/')) {
+    normalized = normalized.split('/').pop() || 'gemini-2.5-flash';
+  }
+  normalized = normalized.replace(/:generateContent$/, '');
+  return normalized || 'gemini-2.5-flash';
+}
+
 function buildContextMessage(context?: ChatRequest['context']): string {
   if (!context) return '';
   
@@ -193,10 +203,10 @@ export default async function handler(
   }
 
   // Check for API key
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     res.status(500).json({
-      response: 'Chat is unavailable: OPENROUTER_API_KEY environment variable is not set.',
+      response: 'Chat is unavailable: GEMINI_API_KEY environment variable is not set.',
       actions: [],
     });
     return;
@@ -226,28 +236,29 @@ export default async function handler(
   }
 
   try {
-    // Build messages with system prompt
-    const messages = [
-      { role: 'system', content: SYSTEM_PROMPT },
-      ...conversationHistory,
-    ];
+    const modelName = normalizeGeminiModel(process.env.GEMINI_MODEL);
+    const contents = conversationHistory.map((item) => ({
+      role: item.role === 'user' ? 'user' : 'model',
+      parts: [{ text: item.content }],
+    }));
 
-    // Call OpenRouter API
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    // Call Gemini API
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': process.env.VERCEL_URL 
-          ? `https://${process.env.VERCEL_URL}` 
-          : 'http://localhost:3000',
-        'X-Title': 'Sinatra Music App',
       },
       body: JSON.stringify({
-        model: process.env.OPENROUTER_MODEL || 'google/gemini-2.0-flash-001',
-        messages,
-        temperature: 0.7,
-        max_tokens: 1024,
+        system_instruction: {
+          parts: [{ text: SYSTEM_PROMPT }],
+        },
+        contents,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        },
       }),
     });
 
@@ -258,7 +269,10 @@ export default async function handler(
     }
 
     const data = await response.json();
-    const responseText = data.choices?.[0]?.message?.content || "I couldn't generate a response.";
+    const responseText = (data.candidates?.[0]?.content?.parts || [])
+      .map((part: { text?: string }) => part.text || '')
+      .join('')
+      .trim() || "I couldn't generate a response.";
 
     // Add assistant response to history
     conversationHistory.push({

@@ -7,7 +7,7 @@ import { Chatbot } from './components/Chatbot';
 import VideoExportModal from './components/VideoExportModal';
 import { InstrumentType, TrackData, Note, Clip, MusicalKey, ScaleType, QuantizeOption, MUSICAL_KEYS, SCALE_TYPES, QUANTIZE_OPTIONS } from './types';
 import { uploadDrum, uploadVocal, renderMidi, reRenderMidi, uploadSample, generateChords, ChatAction, ProjectContext, getMidiNotes, updateMidiNotes, MidiNote, createEmptyMidiClip, hydrateMidi, API_BASE } from './api';
-import { supabase } from './lib/supabase';
+import { getStoredProject, saveStoredProjectData } from './lib/localProjects';
 import { useAuth } from './contexts/AuthContext';
 import { PianoRollEditor } from './components/PianoRollEditor';
 
@@ -48,6 +48,22 @@ const BEATS_PER_BAR = 4;
 const INITIAL_TRACKS: TrackData[] = [
   { id: '1', name: 'Drum Loop', type: 'audio', volume: 0.8, isMuted: false, isSolo: false },
 ];
+
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result);
+        return;
+      }
+
+      reject(new Error('Failed to convert blob to data URL.'));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob.'));
+    reader.readAsDataURL(blob);
+  });
+}
 
 // ---- Metronome click (Web Audio, sample-accurate) ----
 function scheduleClick(ctx: AudioContext, time: number, isDownbeat: boolean) {
@@ -165,24 +181,18 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       setStatusMessage('Loading project...');
       setIsProcessing(true);
 
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('id', projectId)
-        .single();
-
-      if (error || !data) {
-        console.error('Error loading project:', error);
+      const storedProject = getStoredProject(user.id, projectId);
+      if (!storedProject) {
         setError('Project not found');
         setIsProcessing(false);
         return;
       }
 
-      console.log('[Sinatra] Loaded project row:', data);
-      setProjectTitle(data.name);
+      console.log('[Sinatra] Loaded local project:', storedProject);
+      setProjectTitle(storedProject.name);
 
       try {
-        const p = data.data;
+        const p = storedProject.data;
         if (!p || Object.keys(p).length === 0) {
           setIsProcessing(false);
           setStatusMessage('Ready');
@@ -210,10 +220,9 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
               }
 
               // Hydrate backend if needed
-              // Only hydrate if we have a midiFilename AND storageUrl
-              if (c.midiFilename && c.storageUrl) {
+              // Only hydrate when the persisted asset is a fetchable URL.
+              if (c.midiFilename && c.storageUrl && !c.storageUrl.startsWith('data:')) {
                 try {
-                  // Ensure backend has the file
                   await hydrateMidi(c.storageUrl, c.midiFilename);
                 } catch (e) {
                   console.error(`Failed to hydrate ${c.midiFilename}`, e);
@@ -226,6 +235,15 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
           }));
 
           setTracks(processedTracks);
+
+          const drumTrack = processedTracks.find((track) => track.id === '1');
+          if (drumTrack?.audioUrl) {
+            drumAudioUrlRef.current = drumTrack.audioUrl;
+            const el = new Audio(drumTrack.audioUrl);
+            el.loop = true;
+            el.volume = drumTrack.volume * masterVolume;
+            drumAudioElRef.current = el;
+          }
 
           // Re-create audio elements map
           clipAudioMapRef.current.clear();
@@ -289,47 +307,64 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     setStatusMessage('Saving project...');
 
     try {
-      // 1. Upload assets (audio blobs and MIDI files)
+      const persistUrl = async (url?: string): Promise<string | undefined> => {
+        if (!url) {
+          return undefined;
+        }
+
+        if (url.startsWith('blob:')) {
+          const blob = await fetch(url).then((response) => response.blob());
+          return blobToDataUrl(blob);
+        }
+
+        return url;
+      };
+
+      // Persist local audio so projects can be reopened without remote storage.
       const updatedTracks = await Promise.all(tracks.map(async (track: TrackData) => {
-        if (!track.clips) return track;
+        const persistentTrackAudioUrl = await persistUrl(track.audioUrl);
+        if (!track.clips) {
+          return {
+            ...track,
+            audioUrl: persistentTrackAudioUrl,
+          };
+        }
 
         const updatedClips = await Promise.all(track.clips.map(async (clip: Clip) => {
           let newStorageUrl = clip.storageUrl;
 
-          if (clip.audioUrl.startsWith('blob:')) {
-            // New recording or render: upload blob
+          if (clip.audioUrl) {
             try {
-              const blob = await fetch(clip.audioUrl).then(r => r.blob());
-              const filename = `${user.id}/${projectId}/${clip.id}.wav`;
-              await supabase.storage.from('projects').upload(filename, blob, { upsert: true });
-              const { data } = supabase.storage.from('projects').getPublicUrl(filename);
-              newStorageUrl = data.publicUrl;
+              newStorageUrl = await persistUrl(clip.audioUrl);
             } catch (e) {
-              console.error("Failed to upload blob", clip.id, e);
+              console.error('Failed to persist clip audio', clip.id, e);
             }
           } else if (clip.midiFilename && !clip.storageUrl) {
-            // Local MIDI file (from backend): fetch and upload
             try {
               const res = await fetch(`${API_BASE}/uploads/${clip.midiFilename}`);
               if (res.ok) {
                 const blob = await res.blob();
-                const filename = `${user.id}/${projectId}/${clip.id}.mid`;
-                await supabase.storage.from('projects').upload(filename, blob, { upsert: true });
-                const { data } = supabase.storage.from('projects').getPublicUrl(filename);
-                newStorageUrl = data.publicUrl;
+                newStorageUrl = await blobToDataUrl(blob);
               }
             } catch (e) {
-              console.error("Failed to upload MIDI", clip.midiFilename, e);
+              console.error('Failed to persist MIDI asset', clip.midiFilename, e);
             }
           }
 
-          return { ...clip, storageUrl: newStorageUrl };
+          return {
+            ...clip,
+            audioUrl: newStorageUrl || clip.audioUrl,
+            storageUrl: newStorageUrl,
+          };
         }));
 
-        return { ...track, clips: updatedClips };
+        return {
+          ...track,
+          audioUrl: persistentTrackAudioUrl,
+          clips: updatedClips,
+        };
       }));
 
-      // 2. Save JSON state
       const projectData = {
         bpm,
         tracks: updatedTracks,
@@ -340,21 +375,12 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       };
 
       console.log('[Sinatra] Saving project data:', projectData);
-      const { error, count } = await supabase.from('projects').update({
-        data: projectData,
-        updated_at: new Date().toISOString()
-      }, { count: 'exact' }).eq('id', projectId);
-
-      if (error) {
-        console.error('[Sinatra] Supabase update error:', error);
-        throw error;
+      const savedProject = saveStoredProjectData(user.id, projectId, projectData, projectTitle);
+      if (!savedProject) {
+        throw new Error('Save failed: Project not found.');
       }
 
-      if (count === 0) {
-        throw new Error('Save failed: Project not found or permission denied.');
-      }
-
-      setTracks(updatedTracks); // Update local state with new storageUrls
+      setTracks(updatedTracks);
       setStatusMessage('Project saved!');
       setTimeout(() => setStatusMessage('Ready'), 2000);
 
@@ -1487,39 +1513,20 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
   //  PROJECT LOADING
   // ==============================
   useEffect(() => {
-    if (projectId) {
+    if (projectId && user) {
       const loadProject = async () => {
         try {
-          const { data, error } = await supabase
-            .from('projects')
-            .select('name')
-            .eq('id', projectId)
-            .single();
-
-          if (error) throw error;
-          if (data?.name) {
-            setProjectTitle(data.name);
+          const project = getStoredProject(user.id, projectId);
+          if (project?.name) {
+            setProjectTitle(project.name);
           }
         } catch (err) {
           console.error('[Sinatra] Error loading project:', err);
-          // Fallback to localStorage if Supabase fails
-          try {
-            const localProjects = localStorage.getItem(`projects_${projectId}`);
-            if (localProjects) {
-              const projects = JSON.parse(localProjects);
-              const project = Array.isArray(projects) ? projects.find((p: any) => p.id === projectId) : projects;
-              if (project?.name) {
-                setProjectTitle(project.name);
-              }
-            }
-          } catch (e) {
-            console.error('[Sinatra] Error loading from localStorage:', e);
-          }
         }
       };
       loadProject();
     }
-  }, [projectId]);
+  }, [projectId, user]);
 
   // ==============================
   //  EXPORT (opens the video/audio export modal)
@@ -1596,12 +1603,6 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
               setStatusMessage(`Generating ${action.chords!.join(' → ')} on ${instrument}...`);
               setIsProcessing(true);
 
-              // Create a new track for the chords
-              const newId = addTrack();
-              setTracks(prev => prev.map(t =>
-                t.id === newId ? { ...t, instrument: instrument as InstrumentType, name: `${instrument} Chords (Track ${newId})` } : t
-              ));
-
               // Call backend to generate chord audio
               const audioBlob = await generateChords({
                 chords: action.chords!,
@@ -1615,6 +1616,12 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
 
               console.log(`[Sinatra] Chord audio received: ${audioBlob.size} bytes`);
               const audioUrl = URL.createObjectURL(audioBlob);
+
+              // Only create the track after audio generation succeeds.
+              const newId = addTrack();
+              setTracks(prev => prev.map(t =>
+                t.id === newId ? { ...t, instrument: instrument as InstrumentType, name: `${instrument} Chords (Track ${newId})` } : t
+              ));
 
               // Get audio duration
               const tempAudio = new Audio(audioUrl);

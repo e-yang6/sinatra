@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { MessageCircle, X, Send, Bot, User, Mic, MicOff, Trash2 } from 'lucide-react';
-import { sendChatMessage, clearChatHistory, transcribeVoice, ChatAction, ProjectContext } from '../api';
+import { sendChatMessage, clearChatHistory, ChatAction, ProjectContext } from '../api';
 
 interface Message {
   id: string;
@@ -15,6 +15,46 @@ interface ChatbotProps {
   onWidthChange?: (width: number) => void;
   projectContext?: ProjectContext;
   onAction?: (action: ChatAction) => void;
+}
+
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
+}
+
+interface SpeechRecognitionResultLike {
+  0: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike extends Event {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorEventLike extends Event {
+  error: string;
+}
+
+interface SpeechRecognitionLike extends EventTarget {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null;
+  onend: (() => void) | null;
+  start: () => void;
+  stop: () => void;
+}
+
+interface SpeechRecognitionConstructorLike {
+  new (): SpeechRecognitionLike;
+}
+
+declare global {
+  interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructorLike;
+    webkitSpeechRecognition?: SpeechRecognitionConstructorLike;
+  }
 }
 
 export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, projectContext, onAction }) => {
@@ -35,8 +75,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
   const resizeRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const isResizingRef = useRef(false);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -118,7 +157,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}. Make sure the backend is running and OPENROUTER_API_KEY is set.`,
+        content: `Sorry, I encountered an error: ${error?.message || 'Unknown error'}. Make sure the backend is running and GEMINI_API_KEY is set.`,
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -127,98 +166,76 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
     }
   };
 
-  // ---- Convert webm blob to WAV so backend soundfile can read it ----
-  const convertBlobToWav = useCallback(async (blob: Blob): Promise<Blob> => {
-    const audioCtx = new AudioContext({ sampleRate: 24000 });
-    const arrayBuffer = await blob.arrayBuffer();
-    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-    audioCtx.close();
-
-    // Downmix to mono
-    const channelData = audioBuffer.getChannelData(0);
-    const numSamples = channelData.length;
-
-    // Build WAV file
-    const wavBuffer = new ArrayBuffer(44 + numSamples * 2);
-    const view = new DataView(wavBuffer);
-
-    const writeString = (offset: number, str: string) => {
-      for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
-    };
-
-    writeString(0, 'RIFF');
-    view.setUint32(4, 36 + numSamples * 2, true);
-    writeString(8, 'WAVE');
-    writeString(12, 'fmt ');
-    view.setUint32(16, 16, true);           // chunk size
-    view.setUint16(20, 1, true);            // PCM
-    view.setUint16(22, 1, true);            // mono
-    view.setUint32(24, 24000, true);        // sample rate
-    view.setUint32(28, 24000 * 2, true);    // byte rate
-    view.setUint16(32, 2, true);            // block align
-    view.setUint16(34, 16, true);           // bits per sample
-    writeString(36, 'data');
-    view.setUint32(40, numSamples * 2, true);
-
-    // Write PCM samples
-    let offset = 44;
-    for (let i = 0; i < numSamples; i++) {
-      const s = Math.max(-1, Math.min(1, channelData[i]));
-      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-      offset += 2;
-    }
-
-    return new Blob([wavBuffer], { type: 'audio/wav' });
-  }, []);
-
-  // ---- Speech-to-Text (Gradium STT via MediaRecorder) ----
+  // ---- Speech-to-Text (Web Speech API) ----
   const startListening = useCallback(async () => {
     if (isListening || isLoading) return;
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-      audioChunksRef.current = [];
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'Voice input is not supported in this browser. Try Chrome or Edge for Web Speech support.',
+          timestamp: new Date(),
+        }]);
+        return;
+      }
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
+      const recognition = new SpeechRecognition();
+      let transcript = '';
+      let hadError = false;
+
+      recognition.lang = 'en-US';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event) => {
+        transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0]?.transcript || '';
         }
       };
 
-      mediaRecorder.onstop = async () => {
-        // Stop all mic tracks
-        stream.getTracks().forEach(track => track.stop());
+      recognition.onerror = (event) => {
+        hadError = true;
+        recognitionRef.current = null;
+        setIsListening(false);
+        setMessages(prev => [...prev, {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: `Voice input error: ${event.error || 'Unknown speech recognition error'}.`,
+          timestamp: new Date(),
+        }]);
+      };
 
-        const webmBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        audioChunksRef.current = [];
+      recognition.onend = async () => {
+        recognitionRef.current = null;
+        setIsListening(false);
 
-        if (webmBlob.size === 0) return;
+        if (hadError) {
+          return;
+        }
 
-        // Convert webm to WAV for backend compatibility, then transcribe via Gradium
+        const transcribedText = transcript.trim();
+        if (!transcribedText) {
+          return;
+        }
+
         setIsTranscribing(true);
         try {
-          const wavBlob = await convertBlobToWav(webmBlob);
-          const transcribedText = await transcribeVoice(wavBlob);
-
-          if (!transcribedText.trim()) {
-            setIsTranscribing(false);
-            return;
-          }
-
-          // Send transcribed text as a chat message
           const userMessage: Message = {
             id: Date.now().toString(),
             role: 'user',
-            content: transcribedText.trim(),
+            content: transcribedText,
             timestamp: new Date(),
           };
 
           setIsLoading(true);
-          setIsTranscribing(false);
           setMessages(prev => [...prev, userMessage]);
 
-          const result = await sendChatMessage(transcribedText.trim(), projectContext);
+          const result = await sendChatMessage(transcribedText, projectContext);
 
           const assistantMessage: Message = {
             id: (Date.now() + 1).toString(),
@@ -230,7 +247,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           setMessages(prev => [...prev, assistantMessage]);
           processActions(result.actions);
         } catch (error: any) {
-          console.error('Voice transcription/chat error:', error);
+          console.error('Voice chat error:', error);
           setMessages(prev => [...prev, {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
@@ -243,24 +260,22 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
         }
       };
 
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
+      recognitionRef.current = recognition;
+      recognition.start();
       setIsListening(true);
     } catch (error: any) {
-      console.error('Microphone access error:', error);
+      console.error('Voice input start error:', error);
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `Microphone access error: ${error?.message || 'Permission denied'}. Please allow microphone access.`,
+        content: `Voice input error: ${error?.message || 'Permission denied'}. Please allow microphone access.`,
         timestamp: new Date(),
       }]);
     }
-  }, [isListening, isLoading, projectContext, processActions, convertBlobToWav]);
+  }, [isListening, isLoading, projectContext, processActions]);
 
   const stopListening = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-      mediaRecorderRef.current.stop();
-    }
+    recognitionRef.current?.stop();
     setIsListening(false);
   }, []);
 
@@ -275,9 +290,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
-        mediaRecorderRef.current.stop();
-      }
+      recognitionRef.current?.stop();
     };
   }, []);
 
@@ -336,7 +349,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           <div className="flex items-center gap-2">
             <Bot size={16} className="text-[#6993cf]" />
             <span className="text-sm font-medium text-zinc-300">Frank</span>
-            <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">OpenRouter</span>
+            <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded">Gemini</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -432,7 +445,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
           <div className="px-4 py-2 bg-emerald-950/30 border-t border-emerald-900/30 flex items-center gap-2 shrink-0">
             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
             <span className="text-xs text-emerald-400">
-              {isTranscribing ? 'Transcribing with Gradium...' : 'Recording — speak now, click mic to stop'}
+              {isTranscribing ? 'Sending recognized speech...' : 'Listening — speak now, click mic to stop'}
             </span>
           </div>
         )}
@@ -450,7 +463,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
                     ? 'bg-[#6993cf]/20 text-[#6993cf] cursor-wait animate-pulse'
                     : 'bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200'
               } disabled:opacity-50 disabled:cursor-not-allowed`}
-              title={isListening ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice input (Gradium STT)'}
+              title={isListening ? 'Stop listening' : isTranscribing ? 'Processing voice input...' : 'Start voice input (Web Speech API)'}
             >
               {isListening ? <MicOff size={16} /> : <Mic size={16} />}
             </button>
@@ -459,7 +472,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder={isListening ? 'Recording... click mic to stop' : isTranscribing ? 'Transcribing...' : 'Ask me anything...'}
+              placeholder={isListening ? 'Listening... click mic to stop' : isTranscribing ? 'Processing voice input...' : 'Ask me anything...'}
               className={`flex-1 bg-zinc-900 border rounded-lg px-3 py-2 text-sm text-zinc-300 placeholder-zinc-600 focus:outline-none resize-none overflow-y-auto ${
                 isListening ? 'border-emerald-800 focus:border-emerald-700' : 'border-zinc-800 focus:border-zinc-700'
               }`}
@@ -477,7 +490,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({ width = 400, onWidthChange, pr
             </button>
           </div>
           <div className="text-[10px] text-zinc-600 mt-2 text-center">
-            Press Enter to send, Shift+Enter for new line • Click mic for Gradium voice input
+            Press Enter to send, Shift+Enter for new line • Click mic for Web Speech voice input
           </div>
         </div>
       </div>

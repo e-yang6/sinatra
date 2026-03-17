@@ -3,24 +3,19 @@ import { LogOut, Music, Image as ImageIcon, X, Edit2, Trash2, Search, Filter } f
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import {
+  createStoredProject,
+  deleteStoredProject,
+  listStoredProjects,
+  StoredProject as Project,
+  updateStoredProject,
+} from '../lib/localProjects';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Button } from '../components/ui/button';
 
 const sinatraLogo = new URL('../assets/sinalogo.png', import.meta.url).href;
-
-interface Project {
-  id: string;
-  name: string;
-  genre?: string;
-  description?: string;
-  image_url?: string;
-  created_at: string;
-  updated_at: string;
-  user_id: string;
-}
 
 export const ProjectsPage: React.FC = () => {
   const { user, signOut, loading } = useAuth();
@@ -50,23 +45,13 @@ export const ProjectsPage: React.FC = () => {
 
   const loadProjects = async () => {
     if (!user) return;
-    
+
     setLoadingProjects(true);
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-      setProjects(data || []);
+      setProjects(listStoredProjects(user.id));
     } catch (error: any) {
       console.error('Error loading projects:', error);
-      const localProjects = localStorage.getItem(`projects_${user.id}`);
-      if (localProjects) {
-        setProjects(JSON.parse(localProjects));
-      }
+      setProjects([]);
     } finally {
       setLoadingProjects(false);
     }
@@ -92,26 +77,23 @@ export const ProjectsPage: React.FC = () => {
     };
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .insert([newProject]);
+      const storedProject = createStoredProject(user.id, {
+        id: newProject.id,
+        name: newProject.name,
+        genre: newProject.genre,
+        description: newProject.description,
+        image_url: newProject.image_url,
+        created_at: newProject.created_at,
+        updated_at: newProject.updated_at,
+      });
 
-      if (error) throw error;
-      
-      setProjects(prev => [newProject, ...prev]);
+      setProjects(prev => [storedProject, ...prev]);
       setNewProjectName('');
       setNewProjectGenre('');
       setNewProjectDescription('');
       setNewProjectImageUrl('');
     } catch (error: any) {
       console.error('Error creating project:', error);
-      const updatedProjects = [newProject, ...projects];
-      setProjects(updatedProjects);
-      localStorage.setItem(`projects_${user.id}`, JSON.stringify(updatedProjects));
-      setNewProjectName('');
-      setNewProjectGenre('');
-      setNewProjectDescription('');
-      setNewProjectImageUrl('');
     }
   };
 
@@ -136,26 +118,20 @@ export const ProjectsPage: React.FC = () => {
     };
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .update({
-          name: updatedProject.name,
-          genre: updatedProject.genre,
-          description: updatedProject.description,
-          updated_at: updatedProject.updated_at,
-        })
-        .eq('id', project.id);
+      const savedProject = updateStoredProject(user!.id, project.id, {
+        name: updatedProject.name,
+        genre: updatedProject.genre,
+        description: updatedProject.description,
+        updated_at: updatedProject.updated_at,
+      });
 
-      if (error) throw error;
-      
-      setProjects(prev => prev.map(p => p.id === project.id ? updatedProject : p));
+      if (!savedProject) {
+        throw new Error('Project not found');
+      }
+
+      setProjects(prev => prev.map(p => p.id === project.id ? savedProject : p));
     } catch (error: any) {
       console.error('Error updating project:', error);
-      const updatedProjects = projects.map(p => p.id === project.id ? updatedProject : p);
-      setProjects(updatedProjects);
-      if (user) {
-        localStorage.setItem(`projects_${user.id}`, JSON.stringify(updatedProjects));
-      }
     }
   };
 
@@ -164,21 +140,10 @@ export const ProjectsPage: React.FC = () => {
     if (!confirm(`Are you sure you want to delete "${project.name}"?`)) return;
 
     try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', project.id);
-
-      if (error) throw error;
-      
+      deleteStoredProject(user!.id, project.id);
       setProjects(prev => prev.filter(p => p.id !== project.id));
     } catch (error: any) {
       console.error('Error deleting project:', error);
-      const updatedProjects = projects.filter(p => p.id !== project.id);
-      setProjects(updatedProjects);
-      if (user) {
-        localStorage.setItem(`projects_${user.id}`, JSON.stringify(updatedProjects));
-      }
     }
   };
 
