@@ -39,7 +39,7 @@ export const ProjectsPage: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      loadProjects();
+      void loadProjects();
     }
   }, [user]);
 
@@ -48,7 +48,8 @@ export const ProjectsPage: React.FC = () => {
 
     setLoadingProjects(true);
     try {
-      setProjects(listStoredProjects(user.id));
+      const remoteProjects = await listStoredProjects(user.id);
+      setProjects(remoteProjects);
     } catch (error: any) {
       console.error('Error loading projects:', error);
       setProjects([]);
@@ -77,14 +78,12 @@ export const ProjectsPage: React.FC = () => {
     };
 
     try {
-      const storedProject = createStoredProject(user.id, {
+      const storedProject = await createStoredProject(user.id, {
         id: newProject.id,
         name: newProject.name,
         genre: newProject.genre,
         description: newProject.description,
         image_url: newProject.image_url,
-        created_at: newProject.created_at,
-        updated_at: newProject.updated_at,
       });
 
       setProjects(prev => [storedProject, ...prev]);
@@ -118,7 +117,7 @@ export const ProjectsPage: React.FC = () => {
     };
 
     try {
-      const savedProject = updateStoredProject(user!.id, project.id, {
+      const savedProject = await updateStoredProject(user!.id, project.id, {
         name: updatedProject.name,
         genre: updatedProject.genre,
         description: updatedProject.description,
@@ -140,7 +139,7 @@ export const ProjectsPage: React.FC = () => {
     if (!confirm(`Are you sure you want to delete "${project.name}"?`)) return;
 
     try {
-      deleteStoredProject(user!.id, project.id);
+      await deleteStoredProject(user!.id, project.id);
       setProjects(prev => prev.filter(p => p.id !== project.id));
     } catch (error: any) {
       console.error('Error deleting project:', error);

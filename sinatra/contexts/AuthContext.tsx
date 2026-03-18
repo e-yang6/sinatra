@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-
-const AUTH_USERS_KEY = 'sinatra.auth.users';
-const AUTH_SESSION_KEY = 'sinatra.auth.session';
+import type { User, AuthError as SupabaseAuthError, Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabaseClient';
 
 export interface AuthUser {
   id: string;
@@ -19,10 +18,6 @@ export interface AuthError {
   status: number;
 }
 
-interface StoredAuthUser extends AuthUser {
-  password: string;
-}
-
 interface AuthContextType {
   user: AuthUser | null;
   session: AuthSession | null;
@@ -35,55 +30,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function createAuthError(message: string, status: number): AuthError {
+function toAuthUser(user: User | null): AuthUser | null {
+  if (!user) return null;
   return {
-    message,
-    name: 'AuthError',
-    status,
+    id: user.id,
+    email: user.email ?? '',
+    created_at: user.created_at,
   };
 }
 
-function readStoredUsers(): StoredAuthUser[] {
-  try {
-    const raw = localStorage.getItem(AUTH_USERS_KEY);
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error('[Sinatra] Failed to read local auth users:', error);
-    return [];
-  }
+function toAuthError(error: SupabaseAuthError | null): AuthError | null {
+  if (!error) return null;
+  return {
+    message: error.message,
+    name: error.name ?? 'AuthError',
+    status: error.status ?? 400,
+  };
 }
 
-function writeStoredUsers(users: StoredAuthUser[]): void {
-  localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users));
-}
-
-function readStoredSession(): AuthSession | null {
-  try {
-    const raw = localStorage.getItem(AUTH_SESSION_KEY);
-    if (!raw) {
-      return null;
-    }
-
-    const parsed = JSON.parse(raw);
-    return parsed?.user ? parsed as AuthSession : null;
-  } catch (error) {
-    console.error('[Sinatra] Failed to read local auth session:', error);
-    return null;
-  }
-}
-
-function writeStoredSession(session: AuthSession | null): void {
-  if (!session) {
-    localStorage.removeItem(AUTH_SESSION_KEY);
-    return;
-  }
-
-  localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+function toAuthSession(session: Session | null): AuthSession | null {
+  if (!session?.user) return null;
+  return {
+    user: toAuthUser(session.user)!,
+  };
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -92,71 +61,112 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedSession = readStoredSession();
-    setSession(storedSession);
-    setUser(storedSession?.user ?? null);
-    setLoading(false);
+    let isMounted = true;
+
+    const init = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        if (error) {
+          console.error('[Sinatra] Supabase getSession error:', error);
+          setUser(null);
+          setSession(null);
+        } else {
+          const authSession = toAuthSession(data.session);
+          setSession(authSession);
+          setUser(authSession?.user ?? null);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    init();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      const authSession = toAuthSession(newSession);
+      setSession(authSession);
+      setUser(authSession?.user ?? null);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail || !password) {
-      return { error: createAuthError('Email and password are required.', 400) };
+      return {
+        error: {
+          message: 'Email and password are required.',
+          name: 'AuthError',
+          status: 400,
+        },
+      };
     }
 
-    const users = readStoredUsers();
-    if (users.some((storedUser) => storedUser.email === normalizedEmail)) {
-      return { error: createAuthError('An account with that email already exists.', 409) };
-    }
-
-    const createdUser: StoredAuthUser = {
-      id: crypto.randomUUID(),
+    const { error } = await supabase.auth.signUp({
       email: normalizedEmail,
       password,
-      created_at: new Date().toISOString(),
-    };
+    });
 
-    writeStoredUsers([...users, createdUser]);
-    return { error: null };
+    return { error: toAuthError(error) };
   };
 
   const signIn = async (email: string, password: string) => {
     const normalizedEmail = email.trim().toLowerCase();
-    const users = readStoredUsers();
-    const matchedUser = users.find(
-      (storedUser) => storedUser.email === normalizedEmail && storedUser.password === password,
-    );
-
-    if (!matchedUser) {
-      return { error: createAuthError('Invalid email or password.', 401) };
+    if (!normalizedEmail || !password) {
+      return {
+        error: {
+          message: 'Email and password are required.',
+          name: 'AuthError',
+          status: 400,
+        },
+      };
     }
 
-    const nextSession: AuthSession = {
-      user: {
-        id: matchedUser.id,
-        email: matchedUser.email,
-        created_at: matchedUser.created_at,
-      },
-    };
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
 
-    writeStoredSession(nextSession);
-    setSession(nextSession);
-    setUser(nextSession.user);
+    if (error) {
+      return { error: toAuthError(error) };
+    }
+
+    const authSession = toAuthSession(data.session);
+    setSession(authSession);
+    setUser(authSession?.user ?? null);
     return { error: null };
   };
 
   const signOut = async () => {
-    writeStoredSession(null);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('[Sinatra] Supabase signOut error:', error);
+    }
     setSession(null);
     setUser(null);
   };
 
   const resetPassword = async (email: string) => {
-    if (!email.trim()) {
-      return { error: createAuthError('Enter an email address first.', 400) };
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) {
+      return {
+        error: {
+          message: 'Enter an email address first.',
+          name: 'AuthError',
+          status: 400,
+        },
+      };
     }
 
-    return { error: createAuthError('Password reset is unavailable in local mode.', 501) };
+    const { error } = await supabase.auth.resetPasswordForEmail(normalizedEmail);
+    return { error: toAuthError(error) };
   };
 
   return (
@@ -183,3 +193,4 @@ export const useAuth = () => {
   }
   return context;
 };
+
