@@ -13,4 +13,5 @@ resampy>=0.2.2,<0.4.3
 httpx>=0.23.0
 python-dotenv>=1.0.0
 websockets>=12.0
+setuptools>=65.0.0  # Required by resampy for pkg_resources
 # Note: basic-pitch is installed separately in build command to avoid dependency conflicts
