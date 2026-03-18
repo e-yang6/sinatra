@@ -48,11 +48,6 @@ git push origin master
 - **Build Command:** `pip install --upgrade pip && pip install -r requirements.txt && pip install basic-pitch==0.4.0 --no-deps`
 - **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
 
-**Environment Variables:**
-Click "Add Environment Variable" and add:
-- `GEMINI_API_KEY` = `AIzaSyByG6RVY1UXoE_COH5sIDddW1iEMFTzT1g`
-- `GEMINI_MODEL` = `gemini-2.5-flash`
-- `PYTHON_VERSION` = `3.12.0`
 
 **Plan:**
 - **Free:** Starter (512MB RAM) - Good for testing
