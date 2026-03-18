@@ -9,7 +9,14 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     libsndfile1 \
     fluidsynth \
+    libfluidsynth-dev \
+    wget \
     && rm -rf /var/lib/apt/lists/*
+
+# Download SoundFont (FluidSynth doesn't come with one by default)
+RUN mkdir -p /usr/share/sounds/sf2 && \
+    wget -q https://github.com/FluidSynth/fluidsynth/raw/master/soundfont/FluidR3_GM.sf2 -O /usr/share/sounds/sf2/FluidR3_GM.sf2 || \
+    echo "SoundFont download failed, will try system default"
 
 # Copy requirements first for better caching
 COPY requirements.txt .

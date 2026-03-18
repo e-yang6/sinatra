@@ -236,6 +236,16 @@ export default async function handler(
   }
 
   try {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error('GEMINI_API_KEY is not set');
+      res.status(500).json({
+        response: 'Chat is unavailable: GEMINI_API_KEY environment variable is not set.',
+        actions: [],
+      });
+      return;
+    }
+
     const modelName = normalizeGeminiModel(process.env.GEMINI_MODEL);
     const contents = conversationHistory.map((item) => ({
       role: item.role === 'user' ? 'user' : 'model',

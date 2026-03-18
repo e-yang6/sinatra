@@ -15,8 +15,15 @@ warnings.filterwarnings("ignore", message=".*tflite-runtime is not installed.*")
 warnings.filterwarnings("ignore", message=".*Tensorflow is not installed.*")
 warnings.filterwarnings("ignore", message=".*pkg_resources is deprecated.*")
 
-from basic_pitch.inference import predict
-from basic_pitch import ICASSP_2022_MODEL_PATH
+try:
+    from basic_pitch.inference import predict
+    from basic_pitch import ICASSP_2022_MODEL_PATH
+    if predict is None:
+        raise ImportError("basic_pitch.inference.predict is None - basic-pitch may not be properly installed")
+except ImportError as e:
+    print(f"❌ ERROR: Could not import basic_pitch: {e}")
+    print("   This is required for vocal-to-MIDI transcription.")
+    raise
 
 from utils.file_helpers import generate_filepath
 
