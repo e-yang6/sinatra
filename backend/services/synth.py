@@ -35,9 +35,10 @@ except (ImportError, FileNotFoundError, OSError) as e:
 from utils.file_helpers import generate_filepath
 
 # --- SoundFont Configuration ---
+# On Render/Linux, try common system paths first
 SOUNDFONT_PATH = os.environ.get(
     "SOUNDFONT_PATH",
-    "C:/Users/jerem/Downloads/FluidR3_GM/FluidR3_GM.sf2"
+    "/usr/share/sounds/sf2/FluidR3_GM.sf2" if os.name != 'nt' else "C:/Users/jerem/Downloads/FluidR3_GM/FluidR3_GM.sf2"
 )
 
 # General MIDI program numbers for our instrument types

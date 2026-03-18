@@ -5,7 +5,7 @@ services:
   - type: web
     name: sinatra-backend
     runtime: python
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && pip install basic-pitch==0.4.0 --no-deps
+    buildCommand: apt-get update && apt-get install -y fluidsynth libfluidsynth-dev libsndfile1 && pip install --upgrade pip && pip install -r requirements.txt && pip install basic-pitch==0.4.0 --no-deps
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: starter  # Free tier: starter, Paid: standard
     envVars:
