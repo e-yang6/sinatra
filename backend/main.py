@@ -234,6 +234,9 @@ async def upload_vocal(
         }
     else:
         # Convert to MIDI with key/scale/quantize
+        if vocal_to_midi is None:
+            cleanup_file(file_path)
+            raise HTTPException(status_code=503, detail="Transcription service not available. basic-pitch failed to load on this server.")
         try:
             current_bpm = session.get("drum_bpm") or 120
             midi_path = vocal_to_midi(
