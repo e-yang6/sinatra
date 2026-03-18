@@ -26,12 +26,44 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from services.bpm import detect_bpm
-from services.transcription import vocal_to_midi
-from services.chords import generate_chord_progression
-from services.synth import INSTRUMENT_PROGRAMS, render_midi_to_wav
-from services.chat import chat as gemini_chat, clear_history as clear_chat_history
-from utils.file_helpers import save_upload, validate_wav, cleanup_file, UPLOAD_DIR
+# Import services with error handling
+try:
+    from services.bpm import detect_bpm
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import bpm service: {e}")
+    detect_bpm = None
+
+try:
+    from services.transcription import vocal_to_midi
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import transcription service: {e}")
+    vocal_to_midi = None
+
+try:
+    from services.chords import generate_chord_progression
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import chords service: {e}")
+    generate_chord_progression = None
+
+try:
+    from services.synth import INSTRUMENT_PROGRAMS, render_midi_to_wav
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import synth service: {e}")
+    INSTRUMENT_PROGRAMS = {}
+    render_midi_to_wav = None
+
+try:
+    from services.chat import chat as gemini_chat, clear_history as clear_chat_history
+except ImportError as e:
+    print(f"⚠️ Warning: Could not import chat service: {e}")
+    gemini_chat = None
+    clear_chat_history = None
+
+try:
+    from utils.file_helpers import save_upload, validate_wav, cleanup_file, UPLOAD_DIR
+except ImportError as e:
+    print(f"❌ Error: Could not import file helpers: {e}")
+    raise  # This is critical, so we raise
 
 # Verify Basic Pitch is available at startup
 try:
@@ -50,6 +82,25 @@ except ImportError as e:
     print("=" * 60)
 
 app = FastAPI(title="Sinatra", version="0.1.0")
+
+# Startup event to catch initialization errors
+@app.on_event("startup")
+async def startup_event():
+    """Log startup information and catch any initialization errors."""
+    import traceback
+    try:
+        print("=" * 60)
+        print("🚀 Sinatra Backend Starting...")
+        print(f"📁 Working directory: {os.getcwd()}")
+        print(f"📁 Upload directory: {UPLOAD_DIR}")
+        print(f"🔑 GEMINI_API_KEY set: {bool(os.getenv('GEMINI_API_KEY'))}")
+        print(f"🌐 PORT: {os.getenv('PORT', 'NOT SET')}")
+        print("=" * 60)
+        print("✅ App initialized successfully!")
+    except Exception as e:
+        print(f"❌ Startup error: {e}")
+        print(traceback.format_exc())
+        # Don't raise - let the app start so we can see the error
 
 # Allow the frontend (Vite dev server) to call us
 app.add_middleware(
@@ -296,6 +347,10 @@ async def process_all(
         cleanup_file(vocal_path)
         raise HTTPException(status_code=400, detail="Invalid vocal WAV file.")
 
+    if vocal_to_midi is None:
+        cleanup_file(vocal_path)
+        raise HTTPException(status_code=500, detail="Transcription service not available")
+    
     try:
         current_bpm = bpm or session.get("drum_bpm") or 120
         midi_path = vocal_to_midi(vocal_path, bpm=current_bpm)
@@ -332,7 +387,17 @@ async def process_all(
 @app.get("/health")
 async def health():
     """Simple health check."""
-    return {"status": "ok", "session": {k: v is not None for k, v in session.items()}}
+    return {
+        "status": "ok",
+        "session": {k: v is not None for k, v in session.items()},
+        "services": {
+            "bpm": detect_bpm is not None,
+            "transcription": vocal_to_midi is not None,
+            "chords": generate_chord_progression is not None,
+            "synth": render_midi_to_wav is not None,
+            "chat": gemini_chat is not None,
+        }
+    }
 
 
 @app.get("/download-midi")
