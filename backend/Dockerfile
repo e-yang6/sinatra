@@ -1,5 +1,5 @@
-# Use Python 3.12 slim image
-FROM python:3.12-slim
+# Use Python 3.11 slim image (3.11 has native pkg_resources + best basic-pitch/onnxruntime compat)
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
@@ -23,8 +23,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Basic Pitch (special handling) and ensure setuptools is present for pkg_resources
-RUN pip install basic-pitch==0.4.0 --no-deps && pip install setuptools>=65.0.0
+# Install Basic Pitch without deps (avoids pulling tensorflow)
+RUN pip install basic-pitch==0.4.0 --no-deps
 
 # Copy application code
 COPY . .

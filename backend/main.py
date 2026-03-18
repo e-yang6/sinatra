@@ -35,8 +35,8 @@ except ImportError as e:
 
 try:
     from services.transcription import vocal_to_midi
-except ImportError as e:
-    print(f"⚠️ Warning: Could not import transcription service: {e}")
+except Exception as e:
+    print(f"⚠️ Warning: Could not import transcription service: {type(e).__name__}: {e}")
     vocal_to_midi = None
 
 try:
