@@ -23,8 +23,8 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Basic Pitch (special handling)
-RUN pip install basic-pitch==0.4.0 --no-deps
+# Install Basic Pitch (special handling) and ensure setuptools is present for pkg_resources
+RUN pip install basic-pitch==0.4.0 --no-deps && pip install setuptools>=65.0.0
 
 # Copy application code
 COPY . .
