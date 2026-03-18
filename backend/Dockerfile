@@ -13,10 +13,9 @@ RUN apt-get update && apt-get install -y \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Download SoundFont (FluidSynth doesn't come with one by default)
-RUN mkdir -p /usr/share/sounds/sf2 && \
-    wget -q https://github.com/FluidSynth/fluidsynth/raw/master/soundfont/FluidR3_GM.sf2 -O /usr/share/sounds/sf2/FluidR3_GM.sf2 || \
-    echo "SoundFont download failed, will try system default"
+# Download SoundFont (FluidSynth needs a .sf2 file to synthesize audio)
+# Using fluid-soundfont Debian package which includes FluidR3_GM.sf2
+RUN apt-get update && apt-get install -y fluid-soundfont-gm && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
