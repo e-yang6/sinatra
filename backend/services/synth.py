@@ -87,16 +87,17 @@ SAMPLE_RATE = 44100
 
 def _find_soundfont() -> str:
     """Try common SoundFont locations, return the first that exists."""
+    # Linux/Render paths first, then Windows
     candidates = [
         SOUNDFONT_PATH,
-        "C:/Users/jerem/Downloads/FluidR3_GM/FluidR3_GM.sf2",  # User's location
-        "C:/soundfonts/FluidR3_GM.sf2",
-        "C:/soundfonts/default.sf2",
+        "/usr/share/sounds/sf2/FluidR3_GM.sf2",  # Common Linux location
+        "/usr/share/soundfonts/FluidR3_GM.sf2",
+        "/usr/local/share/fluidsynth/FluidR3_GM.sf2",
         os.path.expanduser("~/soundfonts/FluidR3_GM.sf2"),
         os.path.expanduser("~/Downloads/FluidR3_GM/FluidR3_GM.sf2"),
-        "/usr/share/soundfonts/FluidR3_GM.sf2",
-        "/usr/share/sounds/sf2/FluidR3_GM.sf2",
-        "/usr/local/share/fluidsynth/FluidR3_GM.sf2",
+        "C:/Users/jerem/Downloads/FluidR3_GM/FluidR3_GM.sf2",  # Windows location
+        "C:/soundfonts/FluidR3_GM.sf2",
+        "C:/soundfonts/default.sf2",
     ]
     for path in candidates:
         if os.path.isfile(path):
