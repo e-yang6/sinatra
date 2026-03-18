@@ -12,10 +12,10 @@
     }
   ],
   "functions": {
-    "sinatra/api/chat.ts": {
+    "api/chat.ts": {
       "maxDuration": 30
     },
-    "sinatra/api/chat/clear.ts": {
+    "api/chat/clear.ts": {
       "maxDuration": 10
     }
   }
