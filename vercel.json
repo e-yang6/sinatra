@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd sinatra && npm install && npm run build",
-  "outputDirectory": "sinatra/dist",
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist",
   "rewrites": [
     {
       "source": "/api/(.*)",
