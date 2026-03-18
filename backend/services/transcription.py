@@ -113,6 +113,10 @@ def vocal_to_midi(
     print("=" * 60)
     print("🎵 USING SPOTIFY BASIC PITCH (ML MODEL) 🎵")
     print(f"📁 Transcribing: {os.path.basename(wav_path)}")
+    
+    # Verify predict function is available
+    if predict is None:
+        raise RuntimeError("Basic Pitch 'predict' function is not available. Check basic-pitch installation.")
     print(f"🎚️  BPM: {bpm}  |  Key: {key} {scale}  |  Quantize: {quantize}")
     print(f"🤖 Model: {ICASSP_2022_MODEL_PATH}")
     print("=" * 60)

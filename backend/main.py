@@ -147,6 +147,10 @@ async def upload_drum(file: UploadFile = File(...)):
         cleanup_file(file_path)
         raise HTTPException(status_code=400, detail="Invalid WAV file.")
 
+    if detect_bpm is None:
+        cleanup_file(file_path)
+        raise HTTPException(status_code=500, detail="BPM detection service not available")
+    
     try:
         bpm = detect_bpm(file_path)
     except Exception as e:
@@ -279,6 +283,9 @@ async def render(instrument: str = Form(default="Piano")):
         )
 
     try:
+        if render_midi_to_wav is None:
+            raise HTTPException(status_code=500, detail="MIDI rendering service not available. FluidSynth may not be installed.")
+        
         if instrument == "Custom Sample":
             # Use the uploaded one-shot sample as the instrument
             sample_path = session.get("sample_path")
