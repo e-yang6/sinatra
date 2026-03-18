@@ -1,3 +1,260 @@
+# Deployment Guide - Render & Vercel
+
+## 🚀 Quick Start: Deploy to Render + Vercel
+
+This guide covers deploying:
+- **Backend (Python FastAPI)** → Render (Recommended - Simpler!)
+- **Frontend (React)** → Vercel
+
+**Why Render?** Render is much simpler than Google Cloud Run - no Docker setup needed, deploys directly from GitHub, and has a free tier!
+
+---
+
+## 📋 Prerequisites
+
+1. **Render Account** (free tier works) - Sign up at [render.com](https://render.com)
+2. **Vercel Account** (free tier works) - Sign up at [vercel.com](https://vercel.com)
+3. **GitHub Repository** with your code pushed to GitHub
+
+---
+
+## 🔧 Part 1: Deploy Backend to Render (Recommended - Easiest Option)
+
+### Step 1: Push Code to GitHub
+
+Make sure your code is pushed to GitHub:
+```powershell
+git add .
+git commit -m "Prepare for Render deployment"
+git push origin master
+```
+
+### Step 2: Create Render Web Service
+
+1. Go to [dashboard.render.com](https://dashboard.render.com)
+2. Click **"New +"** → **"Web Service"**
+3. Connect your GitHub account if not already connected
+4. Select your repository
+5. Render will auto-detect it's a Python app
+
+### Step 3: Configure Render Service
+
+**Settings:**
+- **Name:** `sinatra-backend`
+- **Region:** Choose closest to you (e.g., `Oregon (US West)`)
+- **Branch:** `master` (or your main branch)
+- **Root Directory:** `backend` (important!)
+- **Runtime:** `Python 3`
+- **Build Command:** `pip install --upgrade pip && pip install -r requirements.txt && pip install basic-pitch==0.4.0 --no-deps`
+- **Start Command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+
+**Environment Variables:**
+Click "Add Environment Variable" and add:
+- `GEMINI_API_KEY` = `AIzaSyByG6RVY1UXoE_COH5sIDddW1iEMFTzT1g`
+- `GEMINI_MODEL` = `gemini-2.5-flash`
+- `PYTHON_VERSION` = `3.12.0`
+
+**Plan:**
+- **Free:** Starter (512MB RAM) - Good for testing
+- **Paid:** Standard (1GB+ RAM) - Better for production
+
+### Step 4: Deploy
+
+Click **"Create Web Service"** - Render will:
+1. Clone your repo
+2. Install dependencies
+3. Build your app
+4. Deploy it
+
+**First deployment takes 5-10 minutes.**
+
+### Step 5: Get Your Backend URL
+
+After deployment completes, you'll see a URL like:
+```
+https://sinatra-backend.onrender.com
+```
+
+**Save this URL** - you'll need it for Vercel configuration.
+
+### Step 6: Update CORS (Important!)
+
+Update `backend/main.py` to allow your Vercel domain. After you deploy the frontend, update this:
+
+```python
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://your-app.vercel.app",  # Your Vercel domain (add after frontend deploy)
+        "http://localhost:3000",
+        "http://localhost:5173"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+```
+
+Then push the change - Render will auto-redeploy.
+
+---
+
+## 🎨 Part 2: Deploy Frontend to Vercel
+
+### Step 1: Connect GitHub Repository
+
+1. Go to [vercel.com](https://vercel.com)
+2. Click "Add New Project"
+3. Import your GitHub repository
+4. Select the repository containing your Sinatra project
+
+### Step 2: Configure Build Settings
+
+Vercel should auto-detect these settings, but verify:
+
+- **Framework Preset:** Vite
+- **Root Directory:** `./` (root of repo)
+- **Build Command:** `cd sinatra && npm install && npm run build`
+- **Output Directory:** `sinatra/dist`
+- **Install Command:** `cd sinatra && npm install`
+
+### Step 3: Set Environment Variables
+
+In Vercel project settings → Environment Variables, add:
+
+**Frontend Variables (VITE_ prefix):**
+```
+VITE_BACKEND_URL=https://sinatra-backend-xxxxx-uc.a.run.app
+```
+
+**Serverless Function Variables (No VITE_ prefix):**
+```
+GEMINI_API_KEY=AIzaSyByG6RVY1UXoE_COH5sIDddW1iEMFTzT1g
+GEMINI_MODEL=gemini-2.5-flash
+```
+
+**Important:**
+- Set these for **Production**, **Preview**, and **Development** environments
+- `VITE_BACKEND_URL` should match your Cloud Run URL from Part 1, Step 6
+
+### Step 4: Deploy
+
+1. Click "Deploy"
+2. Vercel will build and deploy automatically
+3. Wait for deployment to complete (2-5 minutes)
+
+### Step 5: Get Your Frontend URL
+
+After deployment, you'll get a URL like:
+```
+https://sinatra-xxxxx.vercel.app
+```
+
+---
+
+## ✅ Part 3: Final Configuration
+
+### Update Backend CORS with Vercel URL
+
+1. Update `backend/main.py` to include your Vercel domain
+2. Push the change to GitHub
+3. Render will auto-redeploy
+
+```python
+allow_origins=[
+    "https://sinatra-xxxxx.vercel.app",  # Your actual Vercel URL
+    "http://localhost:3000",
+]
+```
+
+### Test Your Deployment
+
+1. **Frontend:** Visit `https://sinatra-xxxxx.vercel.app`
+2. **Backend Health:** Visit `https://sinatra-backend.onrender.com/health`
+3. **Test Features:**
+   - ✅ Chat with AI assistant
+   - ✅ Upload audio files
+   - ✅ Generate chord progressions
+   - ✅ Voice transcription (browser-based)
+
+---
+
+## 💰 Cost Estimation
+
+### Render (Backend)
+- **Free Tier:** 512MB RAM, spins down after 15 min of inactivity (wakes on request)
+- **Paid Tier:** $7/month for Standard (1GB RAM, always on)
+- **Estimated Cost:** $0/month for testing, $7/month for production
+
+### Vercel (Frontend)
+- **Free Tier:** Unlimited deployments, 100GB bandwidth/month
+- **After Free Tier:** $20/month for Pro (if needed)
+- **Estimated Cost:** $0/month for most projects
+
+**Total Estimated Cost:** $0/month (free tier) or $7/month (always-on backend)
+
+---
+
+## 🔄 Continuous Deployment
+
+### Automatic Deploys
+
+- **Vercel:** Automatically deploys on every push to `main` branch
+- **Render:** Automatically deploys on every push to `master`/`main` branch (enabled by default)
+
+**No additional setup needed!** Both platforms watch your GitHub repo.
+
+---
+
+## 🆘 Troubleshooting
+
+### Backend Issues
+
+**Error: "Build failed"**
+- Check Render build logs in the dashboard
+- Verify `requirements.txt` includes all dependencies
+- Check that `Root Directory` is set to `backend` in Render settings
+
+**Error: "Service unavailable" (Free tier)**
+- Free tier services spin down after 15 min of inactivity
+- First request after spin-down takes 30-60 seconds (cold start)
+- Consider upgrading to paid tier for always-on service
+
+**Error: "CORS blocked"**
+- Update `backend/main.py` CORS origins to include your Vercel domain
+- Push changes - Render will auto-redeploy
+
+**Error: "Module not found"**
+- Check `requirements.txt` includes all dependencies
+- Verify build command includes: `pip install basic-pitch==0.4.0 --no-deps`
+
+### Frontend Issues
+
+**Error: "Failed to fetch"**
+- Verify `VITE_BACKEND_URL` is set correctly in Vercel
+- Check backend is accessible: `curl https://your-backend-url/health`
+- Check browser console for specific errors
+
+**Error: "Chat unavailable"**
+- Verify `GEMINI_API_KEY` is set in Vercel (without VITE_ prefix)
+- Check serverless function logs in Vercel dashboard
+
+**Error: "404 on /api/chat"**
+- Verify `api/chat.ts` exists in repository root
+- Check Vercel build logs
+- Ensure file is committed to git
+
+---
+
+## 📚 Additional Resources
+
+- [Render Documentation](https://render.com/docs)
+- [Vercel Documentation](https://vercel.com/docs)
+- [FastAPI Deployment Guide](https://fastapi.tiangolo.com/deployment/)
+- [Render Python Guide](https://render.com/docs/deploy-a-python-app)
+
+---
+
 # Deployment Guide - Security & Architecture Fixes
 
 ## 🔍 What Was Broken
@@ -70,7 +327,7 @@ sinatra/
 
 #### Frontend Variables (VITE_* prefix):
 ```
-VITE_BACKEND_URL=https://your-backend.railway.app  # Your Python backend URL
+VITE_BACKEND_URL=https://sinatra-backend.onrender.com  # Your Render backend URL
 ```
 
 #### Serverless Function Variables (No prefix):
@@ -102,7 +359,7 @@ GEMINI_MODEL=gemini-2.0-flash    # Optional
 
 ### 3. Backend Not Deployed
 **Symptom:** Audio uploads, MIDI rendering, chord generation all fail
-**Fix:** Deploy Python backend to Railway, Render, or Fly.io and set `VITE_BACKEND_URL`
+**Fix:** Deploy Python backend to Render (see Part 1) and set `VITE_BACKEND_URL` to your Render URL
 
 ### 4. CORS Issues
 **Symptom:** API calls fail with CORS errors in browser console
@@ -147,14 +404,14 @@ app.add_middleware(
 
 ## 🔄 Migration Path
 
-### Step 1: Deploy Backend
-Deploy your Python FastAPI backend to Railway, Render, or Fly.io
-- Get the backend URL (e.g., `https://sinatra-backend.railway.app`)
+### Step 1: Deploy Backend to Render
+Follow Part 1 above to deploy to Render
+- Get the backend URL (e.g., `https://sinatra-backend.onrender.com`)
 
 ### Step 2: Update Vercel Environment Variables
 Add to Vercel project settings:
 ```
-VITE_BACKEND_URL=https://sinatra-backend.railway.app
+VITE_BACKEND_URL=https://sinatra-backend.onrender.com
 GEMINI_API_KEY=AIza...
 ```
 

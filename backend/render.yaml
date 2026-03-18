@@ -1,0 +1,19 @@
+# Render Blueprint for Sinatra Backend
+# This file enables one-click deployment on Render
+
+services:
+  - type: web
+    name: sinatra-backend
+    runtime: python
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt && pip install basic-pitch==0.4.0 --no-deps
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: starter  # Free tier: starter, Paid: standard
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: PYTHON_VERSION
+        value: 3.12.0
+    healthCheckPath: /health
+    autoDeploy: true
