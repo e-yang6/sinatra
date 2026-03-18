@@ -1,6 +1,5 @@
 import { MusicalKey, QuantizeOption, ScaleType, TrackData } from '../types';
-
-const PROJECTS_STORAGE_PREFIX = 'sinatra.projects.';
+import { supabase } from './supabaseClient';
 
 export interface StoredProjectData {
   bpm?: number;
@@ -23,97 +22,108 @@ export interface StoredProject {
   data?: StoredProjectData;
 }
 
-function getProjectsStorageKey(userId: string): string {
-  return `${PROJECTS_STORAGE_PREFIX}${userId}`;
-}
+export async function listStoredProjects(userId: string): Promise<StoredProject[]> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false });
 
-function readProjects(userId: string): StoredProject[] {
-  try {
-    const raw = localStorage.getItem(getProjectsStorageKey(userId));
-    if (!raw) {
-      return [];
-    }
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch (error) {
-    console.error('[Sinatra] Failed to read local projects:', error);
-    return [];
+  if (error) {
+    console.error('[Sinatra] Failed to list projects from Supabase:', error);
+    throw error;
   }
+
+  return (data ?? []) as StoredProject[];
 }
 
-function writeProjects(userId: string, projects: StoredProject[]): void {
-  localStorage.setItem(getProjectsStorageKey(userId), JSON.stringify(projects));
+export async function getStoredProject(userId: string, projectId: string): Promise<StoredProject | null> {
+  const { data, error } = await supabase
+    .from('projects')
+    .select('*')
+    .eq('id', projectId)
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[Sinatra] Failed to get project from Supabase:', error);
+    throw error;
+  }
+
+  return (data as StoredProject | null) ?? null;
 }
 
-export function listStoredProjects(userId: string): StoredProject[] {
-  return readProjects(userId).sort(
-    (a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime(),
-  );
-}
-
-export function getStoredProject(userId: string, projectId: string): StoredProject | null {
-  return readProjects(userId).find((project) => project.id === projectId) ?? null;
-}
-
-export function createStoredProject(userId: string, project: Omit<StoredProject, 'user_id'>): StoredProject {
-  const storedProject: StoredProject = {
+export async function createStoredProject(
+  userId: string,
+  project: Omit<StoredProject, 'user_id' | 'created_at' | 'updated_at'>,
+): Promise<StoredProject> {
+  const now = new Date().toISOString();
+  const payload = {
     ...project,
     user_id: userId,
+    created_at: now,
+    updated_at: now,
   };
 
-  const projects = readProjects(userId);
-  writeProjects(userId, [storedProject, ...projects]);
-  return storedProject;
+  const { data, error } = await supabase.from('projects').insert(payload).select().single();
+
+  if (error) {
+    console.error('[Sinatra] Failed to create project in Supabase:', error);
+    throw error;
+  }
+
+  return data as StoredProject;
 }
 
-export function updateStoredProject(
+export async function updateStoredProject(
   userId: string,
   projectId: string,
   updates: Partial<Omit<StoredProject, 'id' | 'user_id' | 'created_at'>>,
-): StoredProject | null {
-  const projects = readProjects(userId);
-  let updatedProject: StoredProject | null = null;
+): Promise<StoredProject | null> {
+  const payload = {
+    ...updates,
+    updated_at: updates.updated_at ?? new Date().toISOString(),
+  };
 
-  const nextProjects = projects.map((project) => {
-    if (project.id !== projectId) {
-      return project;
-    }
+  const { data, error } = await supabase
+    .from('projects')
+    .update(payload)
+    .eq('id', projectId)
+    .eq('user_id', userId)
+    .select()
+    .maybeSingle();
 
-    updatedProject = {
-      ...project,
-      ...updates,
-      updated_at: updates.updated_at ?? new Date().toISOString(),
-    };
-
-    return updatedProject;
-  });
-
-  if (!updatedProject) {
-    return null;
+  if (error) {
+    console.error('[Sinatra] Failed to update project in Supabase:', error);
+    throw error;
   }
 
-  writeProjects(userId, nextProjects);
-  return updatedProject;
+  return (data as StoredProject | null) ?? null;
 }
 
-export function deleteStoredProject(userId: string, projectId: string): void {
-  const projects = readProjects(userId);
-  writeProjects(
-    userId,
-    projects.filter((project) => project.id !== projectId),
-  );
+export async function deleteStoredProject(userId: string, projectId: string): Promise<void> {
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', projectId)
+    .eq('user_id', userId);
+
+  if (error) {
+    console.error('[Sinatra] Failed to delete project in Supabase:', error);
+    throw error;
+  }
 }
 
-export function saveStoredProjectData(
+export async function saveStoredProjectData(
   userId: string,
   projectId: string,
   data: StoredProjectData,
   name?: string,
-): StoredProject | null {
+): Promise<StoredProject | null> {
   return updateStoredProject(userId, projectId, {
     ...(name ? { name } : {}),
     data,
     updated_at: new Date().toISOString(),
   });
 }
+

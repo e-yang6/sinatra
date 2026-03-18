@@ -181,14 +181,14 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       setStatusMessage('Loading project...');
       setIsProcessing(true);
 
-      const storedProject = getStoredProject(user.id, projectId);
+      const storedProject = await getStoredProject(user.id, projectId);
       if (!storedProject) {
         setError('Project not found');
         setIsProcessing(false);
         return;
       }
 
-      console.log('[Sinatra] Loaded local project:', storedProject);
+      console.log('[Sinatra] Loaded project from Supabase:', storedProject);
       setProjectTitle(storedProject.name);
 
       try {
@@ -375,7 +375,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
       };
 
       console.log('[Sinatra] Saving project data:', projectData);
-      const savedProject = saveStoredProjectData(user.id, projectId, projectData, projectTitle);
+      const savedProject = await saveStoredProjectData(user.id, projectId, projectData, projectTitle);
       if (!savedProject) {
         throw new Error('Save failed: Project not found.');
       }
@@ -1516,7 +1516,7 @@ const DAWEditor: React.FC<DAWEditorProps> = ({ projectId }) => {
     if (projectId && user) {
       const loadProject = async () => {
         try {
-          const project = getStoredProject(user.id, projectId);
+          const project = await getStoredProject(user.id, projectId);
           if (project?.name) {
             setProjectTitle(project.name);
           }
